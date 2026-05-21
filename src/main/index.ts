@@ -1,8 +1,10 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import path from 'node:path';
 import { PtyManager } from './pty-manager';
 import { ResourceMonitor } from './resource-monitor';
 import { CompactController } from './compact-controller';
+import { GitService } from './git-service';
+import { GitHubService } from './github-service';
 import { IPC } from '../shared/ipc-channels';
 
 if (require('electron-squirrel-startup')) {
@@ -16,6 +18,13 @@ let mainWindow: BrowserWindow | null = null;
 const ptyManager = new PtyManager();
 const resourceMonitor = new ResourceMonitor();
 const compactController = new CompactController();
+const gitService = new GitService();
+let githubService: GitHubService | null = null;
+
+function getGitHub(): GitHubService {
+  if (!githubService) githubService = new GitHubService();
+  return githubService;
+}
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -111,6 +120,56 @@ function setupCompact() {
   );
 }
 
+function setupGit() {
+  ipcMain.handle(IPC.GIT_DETECT, (_event, cwd?: string) => gitService.detect(cwd));
+  ipcMain.handle(IPC.GIT_GET_CWD, () => gitService.getCwd());
+  ipcMain.handle(IPC.GIT_SET_CWD, (_event, next: string) => gitService.setCwd(next));
+  ipcMain.handle(IPC.GIT_PICK_DIR, async () => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select a folder',
+      properties: ['openDirectory'],
+      defaultPath: gitService.getCwd(),
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return gitService.setCwd(result.filePaths[0]);
+  });
+}
+
+function setupGitHub() {
+  ipcMain.handle(IPC.GITHUB_AUTH_STATE, () => getGitHub().getAuthState());
+  ipcMain.handle(IPC.GITHUB_SET_TOKEN, (_event, token: string) =>
+    getGitHub().setToken(token)
+  );
+  ipcMain.handle(IPC.GITHUB_CLEAR_TOKEN, () => getGitHub().clearToken());
+  ipcMain.handle(IPC.GITHUB_REPO_INFO, (_event, owner: string, repo: string) =>
+    getGitHub().getRepoInfo(owner, repo)
+  );
+  ipcMain.handle(IPC.GITHUB_COMMITS, (_event, owner: string, repo: string) =>
+    getGitHub().listCommits(owner, repo)
+  );
+  ipcMain.handle(IPC.GITHUB_BRANCHES, (_event, owner: string, repo: string) =>
+    getGitHub().listBranches(owner, repo)
+  );
+  ipcMain.handle(
+    IPC.GITHUB_PRS,
+    (_event, owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') =>
+      getGitHub().listPullRequests(owner, repo, state)
+  );
+  ipcMain.handle(
+    IPC.GITHUB_ISSUES,
+    (_event, owner: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') =>
+      getGitHub().listIssues(owner, repo, state)
+  );
+  ipcMain.handle(IPC.GITHUB_OPEN_EXTERNAL, (_event, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+      void shell.openExternal(url);
+      return true;
+    }
+    return false;
+  });
+}
+
 function setupWindowControls() {
   ipcMain.on('window:minimize', () => mainWindow?.minimize());
   ipcMain.on('window:maximize', () => {
@@ -128,6 +187,8 @@ app.whenReady().then(() => {
   setupTerminal();
   setupResources();
   setupCompact();
+  setupGit();
+  setupGitHub();
   setupWindowControls();
 
   app.on('activate', () => {

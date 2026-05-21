@@ -7,6 +7,7 @@ import { ResourcePanel } from './components/resources/ResourcePanel';
 import { CompactPanel } from './components/compact/CompactPanel';
 import { CommandsPanel } from './components/commands/CommandsPanel';
 import { SettingsPanel } from './components/settings/SettingsPanel';
+import { GitHubPanel } from './components/github/GitHubPanel';
 
 export type SidebarPanel =
   | 'terminal'
@@ -102,6 +103,8 @@ function RightPanel({
       return <CommandsPanel onSendCommand={onSendCommand} />;
     case 'settings':
       return <SettingsPanel />;
+    case 'github':
+      return <GitHubPanel />;
     default:
       return <PlaceholderPanel panel={panel} />;
   }
@@ -109,11 +112,6 @@ function RightPanel({
 
 function PlaceholderPanel({ panel }: { panel: string }) {
   const info: Record<string, { title: string; desc: string; phase: string }> = {
-    github: {
-      title: 'GitHub Integration',
-      desc: 'Browse repos, commits, PRs, and issues directly from the sidebar.',
-      phase: 'Phase 4',
-    },
     sync: {
       title: 'Cloud Sync',
       desc: 'Sync conversation vaults across devices via your GitHub repo.',

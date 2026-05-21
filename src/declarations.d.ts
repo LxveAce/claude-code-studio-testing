@@ -66,6 +66,40 @@ interface Window {
         config: Partial<import('./shared/types').CompactConfig>
       ) => Promise<import('./shared/types').CompactConfig>;
     };
+    git: {
+      detect: (cwd?: string) => Promise<import('./shared/types').GitRepoState>;
+      getCwd: () => Promise<string>;
+      setCwd: (cwd: string) => Promise<string>;
+      pickDir: () => Promise<string | null>;
+    };
+    github: {
+      authState: () => Promise<import('./shared/types').GitHubAuthState>;
+      setToken: (token: string) => Promise<import('./shared/types').GitHubAuthState>;
+      clearToken: () => Promise<import('./shared/types').GitHubAuthState>;
+      getRepoInfo: (
+        owner: string,
+        repo: string
+      ) => Promise<import('./shared/types').GitHubRepoInfo>;
+      listCommits: (
+        owner: string,
+        repo: string
+      ) => Promise<import('./shared/types').GitHubCommit[]>;
+      listBranches: (
+        owner: string,
+        repo: string
+      ) => Promise<import('./shared/types').GitHubBranch[]>;
+      listPullRequests: (
+        owner: string,
+        repo: string,
+        state?: 'open' | 'closed' | 'all'
+      ) => Promise<import('./shared/types').GitHubPullRequest[]>;
+      listIssues: (
+        owner: string,
+        repo: string,
+        state?: 'open' | 'closed' | 'all'
+      ) => Promise<import('./shared/types').GitHubIssue[]>;
+      openExternal: (url: string) => Promise<boolean>;
+    };
     window: {
       minimize: () => void;
       maximize: () => void;

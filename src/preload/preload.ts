@@ -37,6 +37,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setConfig: (config: unknown) =>
       ipcRenderer.invoke(IPC.COMPACT_CONFIG_SET, config),
   },
+  git: {
+    detect: (cwd?: string) => ipcRenderer.invoke(IPC.GIT_DETECT, cwd),
+    getCwd: () => ipcRenderer.invoke(IPC.GIT_GET_CWD),
+    setCwd: (cwd: string) => ipcRenderer.invoke(IPC.GIT_SET_CWD, cwd),
+    pickDir: () => ipcRenderer.invoke(IPC.GIT_PICK_DIR),
+  },
+  github: {
+    authState: () => ipcRenderer.invoke(IPC.GITHUB_AUTH_STATE),
+    setToken: (token: string) => ipcRenderer.invoke(IPC.GITHUB_SET_TOKEN, token),
+    clearToken: () => ipcRenderer.invoke(IPC.GITHUB_CLEAR_TOKEN),
+    getRepoInfo: (owner: string, repo: string) =>
+      ipcRenderer.invoke(IPC.GITHUB_REPO_INFO, owner, repo),
+    listCommits: (owner: string, repo: string) =>
+      ipcRenderer.invoke(IPC.GITHUB_COMMITS, owner, repo),
+    listBranches: (owner: string, repo: string) =>
+      ipcRenderer.invoke(IPC.GITHUB_BRANCHES, owner, repo),
+    listPullRequests: (
+      owner: string,
+      repo: string,
+      state: 'open' | 'closed' | 'all' = 'open'
+    ) => ipcRenderer.invoke(IPC.GITHUB_PRS, owner, repo, state),
+    listIssues: (
+      owner: string,
+      repo: string,
+      state: 'open' | 'closed' | 'all' = 'open'
+    ) => ipcRenderer.invoke(IPC.GITHUB_ISSUES, owner, repo, state),
+    openExternal: (url: string) => ipcRenderer.invoke(IPC.GITHUB_OPEN_EXTERNAL, url),
+  },
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
     maximize: () => ipcRenderer.send('window:maximize'),
