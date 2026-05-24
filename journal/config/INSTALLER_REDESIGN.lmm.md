@@ -376,5 +376,69 @@ accepted) / 2 Low.
 5. Run the produced `dist\Claude.Code.Studio-1.0.0-Setup.exe` on a clean
    machine to validate the bootstrap downloads Node + installs Claude CLI.
 
+**Commit:** `8215a56` Phase 8 (docs).
+
+### 2026-05-23 — Branch pushed to origin
+
+Pushed `feature/bootstrap-installer` to GitHub at user request. PR can be
+opened at https://github.com/LxveAce/claude-code-studio/pull/new/feature/bootstrap-installer
+once all phases are complete.
+
+### 2026-05-23 — Phase 6 (first-launch CLI auth onboarding) — COMPLETE
+
+**Hard rc1 blocker per Phase 4 M5** — now unblocked.
+
+**What landed (8 files):**
+- `src/shared/types.ts` — `CliStatus` and `CliOnboardingState` interfaces.
+- `src/shared/ipc-channels.ts` — 5 new channels: `cli:status`,
+  `cli:install`, `cli:onboarding-get`, `cli:onboarding-complete`,
+  `cli:onboarding-reset`.
+- `src/main/cli-service.ts` (new, ~180 lines) — `getStatus()` runs
+  `claude doctor` via execFile, parses output for installed +
+  authenticated state; `install()` shells out to the bundled
+  `runtime/node.exe + npm-cli.js` to re-run Phase 4's npm install
+  (soft-fail recovery); onboarding state persisted at
+  `<userData>/cli-onboarding.json`.
+- `src/main/index.ts` — `CliService` instantiation + `setupCli()` IPC
+  wiring (5 handlers).
+- `src/preload/preload.ts` — `cli` namespace with 5 methods exposed via
+  contextBridge.
+- `src/declarations.d.ts` — ambient `Window.electronAPI.cli` types.
+- `src/renderer/components/auth/CliAuthOnboarding.tsx` (new, ~250 lines)
+  — modal with two paths: "Install Claude CLI" (calls install(), polls
+  status on success) and "Sign in to Claude" (types `claude login\r`
+  into active pane + switches to terminal view). "Maybe later" reshows
+  next launch; "Don't show again" persists.
+- `src/renderer/App.tsx` — onboarding-check effect runs post-hydration,
+  fetches onboarding state + CLI status; modal mounts conditionally
+  with `sendToActivePane` callback that focuses terminal panel first.
+
+**Verified:**
+- `vite:build` clean for all three targets (main, preload, renderer).
+- Renderer bundle grew 5 KB (modal component + onboarding logic) —
+  712.76 kB → still acceptable.
+
+**Behavior end-to-end:**
+1. First launch after install: App hydrates → checks
+   `cli-onboarding.json` → not complete → calls `cli.status()` →
+   `claude doctor` reports missing/unauthenticated → modal renders.
+2. User clicks "Install Claude CLI" → calls bundled npm → ~30s wait →
+   status re-polled → modal transitions to "Sign in to Claude" step.
+3. User clicks "Sign in to Claude" → `claude login\r` typed into
+   active terminal → CLI's browser-based OAuth fires → user completes
+   in browser → terminal shows authenticated state.
+4. User clicks "Don't show again" → persists complete flag → modal
+   never shows on this machine again.
+
+**Red-team:** `docs/security-reviews/SECURITY_REVIEW_BOOTSTRAP_INSTALLER_PHASE6_AUTH.md`
+— 0 Crit / 2 High (doctor exit-code contract is best-effort; unconditional
+`claude login\r` injection is intentional) / 5 Med (all accepted with
+documented rationale or rationale) / 3 Low. Backlog additions:
+streaming npm output in modal (M1), Esc-to-close (L1), Settings option
+to re-show onboarding (M3).
+
+**Remaining for v1.1.0-rc1:** Phase 5 (branding placeholders), Phase 7
+(updater migration), Phase 9 (integrated red-team + clean-VM test).
+
 **Commit:** to follow this entry.
 
