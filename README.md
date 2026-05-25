@@ -1,8 +1,10 @@
 # Claude Code Studio
 
-> A full desktop GUI for [Claude Code](https://claude.com/claude-code) — a real
-> embedded terminal running `claude`, wrapped with resource monitoring, GitHub
-> integration, compact optimization, cost tracking, and cloud sync.
+> **One installer. Zero prereqs.** A desktop GUI for [Claude Code](https://claude.com/claude-code)
+> that ships an embedded terminal running `claude`, plus a sidebar of panels for
+> resource monitoring, GitHub integration, compact optimization, cost tracking,
+> and cloud sync. The installer bundles Node and the Claude CLI for you — no
+> separate `npm install -g` step on any platform.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 ![Windows](https://img.shields.io/badge/Windows-0078D6.svg)
@@ -13,6 +15,21 @@
 <p align="center">
   <img src="./docs/assets/CCS.gif" alt="Claude Code Studio — embedded terminal with sliding sidebar panels" width="800">
 </p>
+
+---
+
+## Quick install
+
+Download from the [**latest release**](https://github.com/LxveAce/claude-code-studio/releases/latest)
+and double-click. The installer downloads Node + the Claude CLI for you and
+launches the app — sign in to Claude in the first-launch modal, done.
+
+- **Windows:** `Claude.Code.Studio-2.0.0-Setup.exe` (NSIS one-click silent install)
+- **macOS Apple Silicon:** `Claude.Code.Studio-2.0.0-arm64.dmg` (drag to Applications)
+- **Linux:** `.AppImage` (portable), `.deb` (Debian/Ubuntu), or `.rpm` (Fedora/RHEL)
+
+Per-platform install details, SmartScreen/Gatekeeper workarounds, and the
+build-from-source instructions are in [Installing v2.0](#installing-v20) below.
 
 ---
 
