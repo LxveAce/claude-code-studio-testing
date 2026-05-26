@@ -43,6 +43,37 @@ export interface ResourceSnapshot {
   timestamp: number;
 }
 
+/** Debug log entry mirror of main's DebugLogService.DebugLogEntry. */
+export type DebugLogKind =
+  | 'ipc-handle'
+  | 'ipc-send'
+  | 'pty-event'
+  | 'updater'
+  | 'service-init'
+  | 'service-call'
+  | 'cli-bootstrap'
+  | 'user-interaction'
+  | 'unhandled'
+  | 'note';
+
+export interface DebugLogEntry {
+  ts: number;
+  iso: string;
+  kind: DebugLogKind;
+  source: string;
+  payload?: unknown;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface DebugLogStatus {
+  enabled: boolean;
+  envForced: boolean;
+  devMode: boolean;
+  settingsEnabled: boolean;
+  logPath: string;
+}
+
 export interface CompactStatus {
   enabled: boolean;
   sessionId: string | null;
@@ -419,7 +450,8 @@ export type SessionPanelId =
   | 'lmm'
   | 'sync'
   | 'auth'
-  | 'settings';
+  | 'settings'
+  | 'debug';
 
 export interface SessionState {
   version: number;

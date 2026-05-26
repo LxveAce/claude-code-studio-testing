@@ -195,4 +195,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     /** Reset onboarding (for re-prompting / debug). */
     resetOnboarding: () => ipcRenderer.invoke(IPC.CLI_ONBOARDING_RESET),
   },
+  debug: {
+    /** Read enabled + log path + source-of-truth flags. */
+    status: () => ipcRenderer.invoke(IPC.DEBUG_STATUS),
+    /** Toggle persistent enabled flag. */
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke(IPC.DEBUG_SET_ENABLED, enabled),
+    /** Get the most recent N entries (default 100, newest first). */
+    tail: (count?: number) => ipcRenderer.invoke(IPC.DEBUG_TAIL, count ?? 100),
+    /** Wipe the log file + ring buffer. */
+    clear: () => ipcRenderer.invoke(IPC.DEBUG_CLEAR),
+    /** Open the log file in the OS default text viewer. */
+    openLog: () => ipcRenderer.invoke(IPC.DEBUG_OPEN_LOG),
+    /** Renderer → main: record a user-interaction event. */
+    logUserEvent: (source: string, payload?: unknown) =>
+      ipcRenderer.send(IPC.DEBUG_LOG_USER_EVENT, source, payload),
+    /** Subscribe to live push of new entries (main → renderer). */
+    onEntry: (callback: (entry: unknown) => void) =>
+      subscribe<[unknown]>(IPC.DEBUG_ENTRY_PUSH, callback),
+  },
 });

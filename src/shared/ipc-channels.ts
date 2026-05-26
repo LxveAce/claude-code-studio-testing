@@ -112,4 +112,15 @@ export const IPC = {
   CLI_ONBOARDING_RESET: 'cli:onboarding-reset',
   /** Main → renderer: each line of npm install output during cli:install. */
   CLI_INSTALL_PROGRESS: 'cli:install-progress',
+
+  // Debug log (testing-only branch — debug-logs).
+  DEBUG_STATUS: 'debug:status',
+  DEBUG_SET_ENABLED: 'debug:set-enabled',
+  DEBUG_TAIL: 'debug:tail',
+  DEBUG_CLEAR: 'debug:clear',
+  DEBUG_OPEN_LOG: 'debug:open-log',
+  /** Renderer → main: log a user-interaction event from the UI. */
+  DEBUG_LOG_USER_EVENT: 'debug:log-user-event',
+  /** Main → renderer: live push of every new log entry. */
+  DEBUG_ENTRY_PUSH: 'debug:entry-push',
 } as const;

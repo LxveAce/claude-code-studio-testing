@@ -16,12 +16,20 @@ import { HotkeysService } from './hotkeys-service';
 import { TrayService } from './tray-service';
 import { CostService } from './cost-service';
 import { CliService } from './cli-service';
+import { DebugLogService } from './debug-log-service';
+import { installIpcInstrumentation, wrapWebContentsSend } from './ipc-instrumentation';
 import { IPC } from '../shared/ipc-channels';
 import type { HotkeyAction } from '../shared/types';
 
 if (require('electron-squirrel-startup')) {
   app.quit();
 }
+
+// Debug logging — must initialize BEFORE any ipcMain.handle() calls so
+// the instrumentation wraps them. Only fires when env DEBUG_DUMP=1, dev
+// mode, or the settings flag is on (otherwise log() is a no-op).
+DebugLogService.instance();
+installIpcInstrumentation();
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -351,6 +359,62 @@ function setupCli() {
   ipcMain.handle(IPC.CLI_ONBOARDING_RESET, () => getCli().resetOnboarding());
 }
 
+function setupDebug() {
+  // testing-only — full IPC handler set for the Debug Log panel.
+  // Lives on `debug-logs` branch; not present on origin/master.
+  const debug = DebugLogService.instance();
+
+  ipcMain.handle(IPC.DEBUG_STATUS, () => ({
+    enabled: debug.isEnabled(),
+    envForced: process.env.DEBUG_DUMP === '1',
+    devMode: !app.isPackaged,
+    settingsEnabled: debug.getSettings().enabled,
+    logPath: debug.getLogPath(),
+  }));
+
+  ipcMain.handle(IPC.DEBUG_SET_ENABLED, (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('enabled must be boolean');
+    }
+    debug.setEnabled(enabled);
+    return {
+      enabled: debug.isEnabled(),
+      envForced: process.env.DEBUG_DUMP === '1',
+      devMode: !app.isPackaged,
+      settingsEnabled: debug.getSettings().enabled,
+      logPath: debug.getLogPath(),
+    };
+  });
+
+  ipcMain.handle(IPC.DEBUG_TAIL, (_event, count?: unknown) => {
+    const n = typeof count === 'number' && count > 0 ? Math.min(count, 1000) : 100;
+    return debug.getTail(n);
+  });
+
+  ipcMain.handle(IPC.DEBUG_CLEAR, () => {
+    debug.clear();
+  });
+
+  ipcMain.handle(IPC.DEBUG_OPEN_LOG, async () => {
+    await shell.openPath(debug.getLogPath());
+  });
+
+  // Renderer → main: fire-and-forget user-interaction event.
+  ipcMain.on(IPC.DEBUG_LOG_USER_EVENT, (_event, source: unknown, payload: unknown) => {
+    if (typeof source !== 'string') return;
+    debug.log({
+      kind: 'user-interaction',
+      source,
+      payload,
+    });
+  });
+
+  // Live push: every new entry → all renderers.
+  debug.on('entry', (entry) => {
+    safeSend(IPC.DEBUG_ENTRY_PUSH, entry);
+  });
+}
+
 function setupGit() {
   ipcMain.handle(IPC.GIT_DETECT, (_event, cwd?: string) => gitService.detect(cwd));
   ipcMain.handle(IPC.GIT_GET_CWD, () => gitService.getCwd());
@@ -640,6 +704,7 @@ app.whenReady().then(() => {
   setupSession();
   setupCost();
   setupCli();
+  setupDebug();
   setupWindowControls();
   setupHotkeys();
   setupTray();

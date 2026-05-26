@@ -232,5 +232,14 @@ interface Window {
       markComplete: () => Promise<import('./shared/types').CliOnboardingState>;
       resetOnboarding: () => Promise<import('./shared/types').CliOnboardingState>;
     };
+    debug: {
+      status: () => Promise<import('./shared/types').DebugLogStatus>;
+      setEnabled: (enabled: boolean) => Promise<import('./shared/types').DebugLogStatus>;
+      tail: (count?: number) => Promise<import('./shared/types').DebugLogEntry[]>;
+      clear: () => Promise<void>;
+      openLog: () => Promise<void>;
+      logUserEvent: (source: string, payload?: unknown) => void;
+      onEntry: (cb: (entry: import('./shared/types').DebugLogEntry) => void) => () => void;
+    };
   };
 }
