@@ -139,7 +139,10 @@ export function DebugLogPanel() {
   }, [entries, kindFilter, search]);
 
   return (
-    <div style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', height: '100%', gap: 8 }}>
+    <div
+      data-debug-panel-root
+      style={{ animation: 'fadeIn 0.3s ease', display: 'flex', flexDirection: 'column', height: '100%', gap: 8 }}
+    >
       <h3 style={titleStyle}>
         <div style={accentBarStyle} />
         Debug Log

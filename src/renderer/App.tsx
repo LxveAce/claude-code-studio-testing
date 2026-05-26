@@ -114,6 +114,59 @@ export function App() {
     return () => window.clearTimeout(handle);
   }, [hydrated, layout, activePanel]);
 
+  // --- Debug log: user-interaction taps (testing-only) -----------------------
+  // Global click listener. Walks up to the nearest interactive ancestor
+  // (button / [role=button] / a / [data-debug-id]) and logs target info.
+  // Skips clicks inside the DebugLogPanel itself to avoid self-pollution.
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      try {
+        const target = e.target as HTMLElement | null;
+        if (!target) return;
+        let n: HTMLElement | null = target;
+        let depth = 0;
+        let interactive: HTMLElement | null = null;
+        while (n && depth < 8) {
+          const tag = n.tagName?.toLowerCase();
+          if (
+            tag === 'button' ||
+            tag === 'a' ||
+            n.getAttribute?.('role') === 'button' ||
+            n.hasAttribute?.('data-debug-id')
+          ) {
+            interactive = n;
+            break;
+          }
+          n = n.parentElement;
+          depth++;
+        }
+        if (!interactive) return;
+        if (interactive.closest('[data-debug-panel-root]')) return; // skip self
+        const text = (interactive.textContent || '').slice(0, 80).trim();
+        const aria = interactive.getAttribute('aria-label') || undefined;
+        const debugId = interactive.getAttribute('data-debug-id') || undefined;
+        window.electronAPI.debug?.logUserEvent('click', {
+          tag: interactive.tagName.toLowerCase(),
+          text,
+          ariaLabel: aria,
+          debugId,
+          activePanel,
+        });
+      } catch {
+        // never let logging break user interaction
+      }
+    };
+    window.addEventListener('click', onClick, true);
+    return () => window.removeEventListener('click', onClick, true);
+  }, [activePanel]);
+
+  // Log panel switches.
+  useEffect(() => {
+    try {
+      window.electronAPI.debug?.logUserEvent('panel-switch', { to: activePanel });
+    } catch { /* ignore */ }
+  }, [activePanel]);
+
   // --- CLI onboarding check (Phase 6) ----------------------------------------
   // Runs once post-hydration. If user hasn't completed onboarding AND the CLI
   // is either missing or unauthenticated, show the modal. Soft-fails silently
