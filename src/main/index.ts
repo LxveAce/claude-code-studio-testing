@@ -30,6 +30,7 @@ import {
   PROVIDER_ENV_KEY,
 } from './provider-auth-service';
 import { PtyKeyInterceptor } from './pty-key-interceptor';
+import { providerDetect } from './provider-detect';
 import { readCliFlags, writeCliFlags, type CliFlags } from './cli-flags';
 import {
   listDir as projectListDir,
@@ -1050,6 +1051,16 @@ function setupProviderAuth() {
     const id = normalizeProvider(provider) ?? (provider as never);
     return svc.delete(id);
   });
+  ipcMain.handle(IPC.PROVIDER_DETECT_LIST, async (_event, force: unknown) => {
+    return await providerDetect.list(force === true);
+  });
+  ipcMain.handle(
+    IPC.PROVIDER_DETECT_GET,
+    async (_event, cli: unknown, force: unknown) => {
+      if (typeof cli !== 'string') throw new Error('cli must be string');
+      return await providerDetect.get(cli, force === true);
+    }
+  );
   ipcMain.handle(
     IPC.PROVIDER_KEY_SUBMIT,
     (_event, paneId: unknown, provider: unknown, key: unknown) => {

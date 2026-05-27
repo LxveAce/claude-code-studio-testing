@@ -185,6 +185,9 @@ export const IPC = {
   PROVIDER_AUTH_SET_KEY: 'provider-auth:set-key',
   PROVIDER_AUTH_LIST: 'provider-auth:list',
   PROVIDER_AUTH_DELETE: 'provider-auth:delete',
+  /** Probe whether a provider's CLI (gemini, aider, …) is on PATH. */
+  PROVIDER_DETECT_LIST: 'provider-detect:list',
+  PROVIDER_DETECT_GET: 'provider-detect:get',
   /** Main → renderer: a spawned CLI just hit an API-key prompt we recognized.
    *  Payload = ProviderKeyPromptEvent. Renderer shows ApiKeyModal. */
   PROVIDER_KEY_PROMPT: 'provider-auth:key-prompt',

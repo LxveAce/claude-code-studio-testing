@@ -801,6 +801,16 @@ export interface ProviderKeyPromptEvent {
   source: 'pre-launch' | 'pty-interceptor';
 }
 
+/** Detection result for a provider CLI. Used by the catalog to gate
+ *  Launch buttons + surface install instructions when missing. */
+export interface ProviderCliDetectResult {
+  cli: string;
+  installed: boolean;
+  version: string | null;
+  installHint: string;
+  installUrl: string;
+}
+
 // The full ElectronAPI shape lives in src/declarations.d.ts as an ambient
 // Window typing. Don't redeclare it here — keep this file for serializable
 // IPC payload types only.

@@ -183,6 +183,13 @@ interface Window {
         provider: import('./shared/types').ProviderId,
         key: string
       ) => Promise<boolean>;
+      detectList: (
+        force?: boolean
+      ) => Promise<import('./shared/types').ProviderCliDetectResult[]>;
+      detectGet: (
+        cli: string,
+        force?: boolean
+      ) => Promise<import('./shared/types').ProviderCliDetectResult>;
     };
     updater: {
       getState: () => Promise<import('./shared/types').UpdaterState>;

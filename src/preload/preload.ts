@@ -162,6 +162,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       subscribe<[unknown]>(IPC.PROVIDER_KEY_PROMPT, callback),
     submitKey: (paneId: string, provider: string, key: string) =>
       ipcRenderer.invoke(IPC.PROVIDER_KEY_SUBMIT, paneId, provider, key),
+    /** Detect installed status of known provider CLIs (gemini, aider, …). */
+    detectList: (force?: boolean) =>
+      ipcRenderer.invoke(IPC.PROVIDER_DETECT_LIST, Boolean(force)),
+    detectGet: (cli: string, force?: boolean) =>
+      ipcRenderer.invoke(IPC.PROVIDER_DETECT_GET, cli, Boolean(force)),
   },
   updater: {
     getState: () => ipcRenderer.invoke(IPC.UPDATER_GET_STATE),

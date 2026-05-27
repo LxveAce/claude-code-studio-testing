@@ -37,6 +37,78 @@ export const MODEL_CATALOG_SEED: ModelDefinition[] = [
     recommendedFor: 'The strongest agentic coder available — use as your primary for multi-file refactors, tool-use loops, and fuzzy debugging.',
   },
 
+  {
+    id: 'api.google.gemini-cli',
+    name: 'Gemini (Google)',
+    description: "Google's gemini-cli — interactive Gemini Pro / Flash from the terminal.",
+    category: 'api',
+    provider: 'Google',
+    command: 'gemini',
+    roles: ['general-chat', 'reasoning', 'long-context', 'vision'],
+    badge: 'New',
+    recommendedFor: 'Use for long-context tasks (1M tokens), multimodal prompts, and as a second opinion alongside Claude.',
+    strengths: [
+      'Massive context window (1M tokens on Gemini 1.5/2.0 Pro)',
+      'Strong multimodal — paste images / PDFs inline',
+    ],
+    weaknesses: [
+      'CLI is younger than Claude/Aider; expect rough edges',
+    ],
+    license: 'Proprietary',
+    licenseUrl: 'https://aistudio.google.com',
+  },
+
+  {
+    id: 'api.aider.multi',
+    name: 'Aider (multi-provider)',
+    description: 'Open-source pair-programming CLI; picks the API based on the model flag.',
+    category: 'api',
+    provider: 'OpenAI',
+    command: 'aider',
+    args: ['--model', 'gpt-4o'],
+    roles: ['polyglot-code', 'agentic', 'backend', 'frontend'],
+    badge: 'OSS',
+    recommendedFor: 'Use when you want repo-aware code edits via OpenAI / Anthropic / Gemini with diff review at every step.',
+    strengths: [
+      'Repo-aware editing with git integration',
+      'Works against OpenAI, Anthropic, Gemini, OpenRouter via one CLI',
+    ],
+    weaknesses: [
+      'Requires `pip install aider-chat`; not bundled',
+      'Auth pattern differs from Claude — env var per provider',
+    ],
+    license: 'Apache 2.0',
+    licenseUrl: 'https://github.com/Aider-AI/aider',
+  },
+
+  {
+    id: 'api.openrouter.aider',
+    name: 'OpenRouter (via Aider)',
+    description: "Aider talking to OpenRouter's OpenAI-compatible endpoint — one key, many models.",
+    category: 'api',
+    provider: 'OpenRouter',
+    command: 'aider',
+    args: [
+      '--openai-api-base',
+      'https://openrouter.ai/api/v1',
+      '--model',
+      'openrouter/anthropic/claude-3.5-sonnet',
+    ],
+    roles: ['polyglot-code', 'agentic', 'general-chat'],
+    badge: 'OSS',
+    recommendedFor: 'Use when you want to A/B many providers without managing a key per provider. One OPENROUTER_API_KEY routes everywhere.',
+    strengths: [
+      'One key → access to 100+ models',
+      'Reuses the existing Aider install + workflow',
+    ],
+    weaknesses: [
+      'OpenRouter takes a markup; not the cheapest path',
+      'Requires Aider installed first (pip install aider-chat)',
+    ],
+    license: 'Apache 2.0 (Aider) + OpenRouter ToS',
+    licenseUrl: 'https://openrouter.ai/terms',
+  },
+
   // === LOCAL MODELS — General chat / assistant ===
   {
     id: 'ollama.qwen3-8b',

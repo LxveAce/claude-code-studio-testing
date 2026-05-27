@@ -14,7 +14,9 @@ import type {
 import { EmbeddedTerminal } from './EmbeddedTerminal';
 import { AddModelModal } from './AddModelModal';
 import { FirstRunPicker } from './FirstRunPicker';
+import { ProviderSetupModal } from './ProviderSetupModal';
 import { ApiKeyModal } from '../auth/ApiKeyModal';
+import type { ProviderCliDetectResult } from '../../../shared/types';
 
 /** Map a ModelDefinition.provider display name → canonical ProviderId (or
  *  null for providers that don't need an API key). Mirrors the main-process
@@ -353,6 +355,32 @@ export function ModelsPanel() {
     provider: ProviderId;
   } | null>(null);
 
+  /** Setup-instructions state: when the model's CLI isn't on PATH, we
+   *  pause the launch and show ProviderSetupModal. Retry re-probes and
+   *  proceeds if the user installed in the meantime. */
+  const [pendingSetup, setPendingSetup] = useState<{
+    model: ModelDefinition;
+    detect: ProviderCliDetectResult;
+  } | null>(null);
+
+  /** Returns the detection result for a model's command if we know how to
+   *  detect it; null otherwise. Detected CLIs are limited to providers we
+   *  don't bundle (gemini, aider). Claude is handled separately, Ollama
+   *  has its own panel-level surfacing. */
+  const detectModelCli = useCallback(
+    async (m: ModelDefinition): Promise<ProviderCliDetectResult | null> => {
+      const cmd = m.command;
+      // We only know how to probe these.
+      if (cmd !== 'gemini' && cmd !== 'aider') return null;
+      try {
+        return await window.electronAPI.providerAuth.detectGet(cmd);
+      } catch {
+        return null;
+      }
+    },
+    []
+  );
+
   const performLaunch = useCallback(async (m: ModelDefinition) => {
     setBusy((p) => ({ ...p, [m.id]: true }));
     try {
@@ -381,6 +409,16 @@ export function ModelsPanel() {
     if (m.licenseFlag && !confirm(`${m.name} is governed by "${m.license}". This license has commercial-use restrictions worth reviewing before regular use. Continue launch?`)) {
       return;
     }
+    // Provider CLI detection for non-Anthropic providers we don't bundle
+    // (gemini, aider). If the CLI isn't installed, surface install
+    // instructions BEFORE we ask for an API key — wrong order would
+    // mean the user enters their key, then we say "actually you need
+    // to install aider first." Detection is cached for the session.
+    const detect = await detectModelCli(m);
+    if (detect && !detect.installed) {
+      setPendingSetup({ model: m, detect });
+      return;
+    }
     // Pre-launch key check for API providers. We only prompt for known
     // providers that need a key (anthropic / openai / gemini / openrouter);
     // local providers (Ollama) skip this entirely. If a key is on file we
@@ -400,6 +438,25 @@ export function ModelsPanel() {
     }
     await performLaunch(m);
   };
+
+  const onSetupRetry = useCallback(async () => {
+    if (!pendingSetup) return;
+    const { model } = pendingSetup;
+    let next: ProviderCliDetectResult | null = null;
+    try {
+      next = await window.electronAPI.providerAuth.detectGet(model.command, true);
+    } catch {
+      // Probe error — keep modal open so user can retry again.
+      return;
+    }
+    if (next?.installed) {
+      setPendingSetup(null);
+      await handleLaunch(model);
+    } else {
+      // Still not installed — update the modal's detect snapshot.
+      setPendingSetup({ model, detect: next });
+    }
+  }, [pendingSetup]);
 
   const onPendingKeySubmit = async (key: string) => {
     if (!pendingLaunch) return;
@@ -657,6 +714,15 @@ export function ModelsPanel() {
           source="pre-launch"
           onSubmit={onPendingKeySubmit}
           onDismiss={() => setPendingLaunch(null)}
+        />
+      )}
+
+      {pendingSetup && (
+        <ProviderSetupModal
+          modelName={pendingSetup.model.name}
+          detect={pendingSetup.detect}
+          onRetry={onSetupRetry}
+          onDismiss={() => setPendingSetup(null)}
         />
       )}
     </div>
