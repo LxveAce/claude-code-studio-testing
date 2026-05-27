@@ -44,16 +44,26 @@ the terminal-first workflow.
 
 - **Embedded terminal** — real PTY running `claude`, with split panes and
   session persistence.
-- **Multi-model catalog (v3.0, testing branch)** — 33-model curated catalog
-  of local + API models (Qwen, DeepSeek, Llama, Gemma, Granite, Phi,
-  Mistral, embeddings). Hardware-tier auto-detect, cwd-aware
-  recommendations (frontend vs backend), in-panel terminal + pop-out
-  windows for launched models, first-run picker that pre-pulls your
-  hardware's defaults. Ollama is detected at runtime; if missing, the
-  app surfaces a one-click install link (it is NOT bundled in the
-  installer). See [docs/MULTI_MODEL.md](./docs/MULTI_MODEL.md).
-- **Resource monitor** — live CPU / RAM / GPU, including per-Claude-process
-  aggregation across panes.
+- **Multi-model catalog (v3.0)** — 33-model curated catalog of local +
+  API models (Qwen, DeepSeek, Llama, Gemma, Granite, Phi, Mistral,
+  embeddings). Hardware-tier auto-detect, cwd-aware recommendations
+  (frontend vs backend), in-panel terminal + pop-out windows for
+  launched models, first-run picker that pre-pulls your hardware's
+  defaults. Ollama is detected at runtime; if missing, the app surfaces
+  a one-click install link (not bundled in the installer). See
+  [docs/MULTI_MODEL.md](./docs/MULTI_MODEL.md).
+- **File directory navigator (v3.0)** — sidebar panel with lazy folder
+  tree, recent projects, show/hide dotfiles. Path-traversal guarded.
+- **Resource monitor** — live CPU / RAM / GPU; v3.0 splits the per-process
+  bucket into Claude PTYs, model PTYs, and the Ollama daemon so the
+  numbers stay accurate when running local models.
+- **`--dangerously-skip-permissions` toggle (v3.0)** — Settings → Claude
+  CLI. Auto-injects the flag when spawning Claude; never touches model
+  PTYs. Off by default; turn on only in trusted projects.
+- **Danger Zone (v3.0)** — Settings → bottom. Reset User Data wipes the
+  JSON state files Studio wrote (keeps Chromium profile). Uninstall is
+  cross-platform: Windows spawns NSIS uninstaller, macOS opens Finder
+  at /Applications, Linux detects pkg format and shows the right hint.
 - **Compact controller** — reads/toggles the compact-controller hooks and state.
 - **GitHub integration** — repos, commits, branches, PRs, and issues; PAT stored
   encrypted via Electron `safeStorage`.
@@ -70,7 +80,7 @@ See [`docs/HANDOFF.md`](./docs/HANDOFF.md) for the per-phase breakdown.
 
 ## Platform support
 
-v2.0 ships on **Windows**, **macOS** (Intel + Apple Silicon), and **Linux**
+v3.0 ships on **Windows**, **macOS** (Apple Silicon), and **Linux**
 (AppImage / .deb / .rpm). All three include the same bootstrap that
 installs Node + the Claude CLI for you — no manual prereqs.
 

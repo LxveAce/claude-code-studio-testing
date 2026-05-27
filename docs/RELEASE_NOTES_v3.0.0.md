@@ -92,7 +92,3 @@ Multi-model catalog research compiled May 2026 against:
 - Independent reviews: InsiderLLM 2026, RTX 5070 benchmarks (Pooya Golchian), index.dev reviews
 
 Built with Electron 42, React 19, Vite, node-pty, xterm.js, Octokit.
-
----
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
