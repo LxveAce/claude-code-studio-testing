@@ -142,8 +142,16 @@ export const IPC = {
   OLLAMA_DAEMON_STATE: 'ollama:daemon-state',
   OLLAMA_DAEMON_START: 'ollama:daemon-start',
   OLLAMA_DAEMON_STOP: 'ollama:daemon-stop',
+  /** Restart the Studio-owned Ollama daemon — used after the user changes
+   *  their GPU routing preference (vars only re-read on serve startup). */
+  OLLAMA_DAEMON_RESTART: 'ollama:daemon-restart',
   /** Main → renderer: daemon-state changed event. */
   OLLAMA_DAEMON_STATE_CHANGED: 'ollama:daemon-state-changed',
+
+  /** GPU routing preferences (per-app, applied to the Ollama daemon on
+   *  next serve startup). */
+  GPU_PREFS_GET: 'gpu-prefs:get',
+  GPU_PREFS_SET: 'gpu-prefs:set',
 
   // App metadata + lifecycle.
   APP_VERSION: 'app:version',

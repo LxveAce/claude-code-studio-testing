@@ -305,9 +305,16 @@ interface Window {
       daemonState: () => Promise<import('./shared/types').OllamaDaemonState>;
       daemonStart: () => Promise<{ ok: boolean; error: string | null }>;
       daemonStop: () => Promise<import('./shared/types').OllamaDaemonState>;
+      daemonRestart: () => Promise<{ ok: boolean; error: string | null }>;
       onDaemonStateChanged: (
         cb: (state: import('./shared/types').OllamaDaemonState) => void
       ) => () => void;
+    };
+    gpuPrefs: {
+      get: () => Promise<import('./shared/types').GpuPrefs>;
+      set: (
+        patch: Partial<import('./shared/types').GpuPrefs>
+      ) => Promise<import('./shared/types').GpuPrefs>;
     };
     hardware: {
       detect: (force?: boolean) => Promise<import('./shared/types').HardwareProfile>;

@@ -31,6 +31,7 @@ import {
 } from './provider-auth-service';
 import { PtyKeyInterceptor } from './pty-key-interceptor';
 import { providerDetect } from './provider-detect';
+import { readGpuPrefs, writeGpuPrefs } from './gpu-prefs';
 import { readCliFlags, writeCliFlags, type CliFlags } from './cli-flags';
 import {
   listDir as projectListDir,
@@ -618,6 +619,11 @@ function setupOllama() {
   ipcMain.handle(IPC.OLLAMA_DAEMON_STOP, () => {
     svc.daemonStop();
     return svc.daemonState();
+  });
+  ipcMain.handle(IPC.OLLAMA_DAEMON_RESTART, () => svc.daemonRestart());
+  ipcMain.handle(IPC.GPU_PREFS_GET, () => readGpuPrefs());
+  ipcMain.handle(IPC.GPU_PREFS_SET, (_event, patch: unknown) => {
+    return writeGpuPrefs((patch ?? {}) as Parameters<typeof writeGpuPrefs>[0]);
   });
   svc.on('daemon-state', (state) => {
     safeSend(IPC.OLLAMA_DAEMON_STATE_CHANGED, state);

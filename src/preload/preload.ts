@@ -251,8 +251,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     daemonState: () => ipcRenderer.invoke(IPC.OLLAMA_DAEMON_STATE),
     daemonStart: () => ipcRenderer.invoke(IPC.OLLAMA_DAEMON_START),
     daemonStop: () => ipcRenderer.invoke(IPC.OLLAMA_DAEMON_STOP),
+    daemonRestart: () => ipcRenderer.invoke(IPC.OLLAMA_DAEMON_RESTART),
     onDaemonStateChanged: (callback: (state: unknown) => void) =>
       subscribe<[unknown]>(IPC.OLLAMA_DAEMON_STATE_CHANGED, callback),
+  },
+  gpuPrefs: {
+    get: () => ipcRenderer.invoke(IPC.GPU_PREFS_GET),
+    set: (patch: unknown) => ipcRenderer.invoke(IPC.GPU_PREFS_SET, patch),
   },
   hardware: {
     detect: (force = false) => ipcRenderer.invoke(IPC.HARDWARE_DETECT, force),

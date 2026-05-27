@@ -47,7 +47,7 @@ export type ModelCategory = 'api' | 'local';
  * (which tiers does this model target?) and the hardware detector
  * (what tier is the host machine?). See src/main/hardware-detection.ts.
  */
-export type HardwareTier = 'toaster' | 'low' | 'mid' | 'high' | 'workstation';
+export type HardwareTier = 'toaster' | 'low' | 'mid' | 'high' | 'workstation' | 'jetson-thor';
 
 /**
  * Catalog-side use-case tags. Multi-select per model so a polyglot
@@ -174,16 +174,45 @@ export interface OllamaPullProgressEvent {
   bytesTotal: number | null;
 }
 
+/** Canonical GPU vendor used by the Ollama routing decisions. */
+export type GpuVendor = 'nvidia' | 'amd' | 'intel' | 'apple' | 'other';
+
+/** Backend Ollama would target for a given GPU. */
+export type GpuBackend = 'cuda' | 'rocm' | 'metal' | 'vulkan' | 'cpu';
+
+export interface GpuInfo {
+  name: string;
+  vendor: GpuVendor;
+  vramGB: number | null;
+  isDedicated: boolean;
+  vendorId: number | null;
+  backend: GpuBackend;
+  index: number;
+}
+
 export interface HardwareProfile {
   cpu: { model: string; physicalCores: number; logicalCores: number };
   ramGB: number;
-  gpus: Array<{ name: string; vendor: string; vramGB: number | null }>;
+  gpus: GpuInfo[];
   maxVramGB: number;
   totalVramGB: number;
+  /** Largest dedicated GPU; null if no dedicated GPU is present. */
+  preferredGpu: GpuInfo | null;
+  /** Backend that would route the preferred GPU. `cpu` if no dedicated GPU. */
+  ollamaCompat: GpuBackend;
   tier: HardwareTier;
   summary: string;
   platform: 'win32' | 'darwin' | 'linux' | 'other';
   detectedAt: string;
+}
+
+/** GPU routing preference for the Ollama daemon. Mirrors `src/main/gpu-prefs.ts`. */
+export type GpuMode = 'auto' | 'gpu' | 'cpu';
+export interface GpuPrefs {
+  mode: GpuMode;
+  targetGpuIndex: number | null;
+  enableVulkan: boolean;
+  flashAttention: boolean;
 }
 
 export type ProjectRole =

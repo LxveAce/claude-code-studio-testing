@@ -775,9 +775,155 @@ function HardwareBanner({ hardware, ollama }: { hardware: HardwareProfile | null
           </a>
         )}
       </div>
+      <GpuRoutingRow hardware={hardware} ollamaReachable={Boolean(ollama?.installed && ollama.daemonReachable)} />
     </div>
   );
 }
+
+/**
+ * GPU routing controls — let the user override Ollama's auto-detect when
+ * it's getting their dedicated GPU wrong. Renders inside HardwareBanner.
+ *
+ * Behavior: dropdown selects mode (Auto / GPU / CPU). On GPU mode with
+ * multiple dedicated GPUs, a second dropdown picks which one. "Apply"
+ * persists the prefs + restarts the daemon (vars only take effect on
+ * fresh `ollama serve`).
+ */
+function GpuRoutingRow({
+  hardware,
+  ollamaReachable,
+}: {
+  hardware: HardwareProfile;
+  ollamaReachable: boolean;
+}) {
+  const [prefs, setPrefs] = useState<import('../../../shared/types').GpuPrefs | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void window.electronAPI.gpuPrefs
+      .get()
+      .then((p) => {
+        if (!cancelled) setPrefs(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!prefs) return null;
+  const dedicatedGpus = hardware.gpus.filter((g) => g.isDedicated);
+
+  const onModeChange = (mode: 'auto' | 'gpu' | 'cpu') => {
+    setPrefs({ ...prefs, mode });
+    setDirty(true);
+    setStatus(null);
+  };
+  const onGpuChange = (idxStr: string) => {
+    const idx = idxStr === '' ? null : Number(idxStr);
+    setPrefs({ ...prefs, targetGpuIndex: idx });
+    setDirty(true);
+    setStatus(null);
+  };
+  const onApply = async () => {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const saved = await window.electronAPI.gpuPrefs.set(prefs);
+      setPrefs(saved);
+      if (ollamaReachable) {
+        const r = await window.electronAPI.ollama.daemonRestart();
+        if (!r.ok) {
+          setStatus(`Daemon restart failed: ${r.error ?? 'unknown'}`);
+        } else {
+          setStatus('Applied. Daemon restarted with new GPU routing.');
+        }
+      } else {
+        setStatus('Saved. Will apply on next daemon start.');
+      }
+      setDirty(false);
+    } catch (e) {
+      setStatus(`Save failed: ${(e as Error).message ?? String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 6,
+        flexWrap: 'wrap',
+        fontSize: 10,
+        color: 'var(--text-secondary)',
+      }}
+    >
+      <span>GPU routing:</span>
+      <select
+        value={prefs.mode}
+        onChange={(e) => onModeChange(e.target.value as 'auto' | 'gpu' | 'cpu')}
+        disabled={busy}
+        style={gpuSelectStyle}
+      >
+        <option value="auto">Auto-detect</option>
+        <option value="gpu" disabled={dedicatedGpus.length === 0}>
+          Force GPU {dedicatedGpus.length === 0 ? '(none detected)' : ''}
+        </option>
+        <option value="cpu">Force CPU</option>
+      </select>
+      {prefs.mode === 'gpu' && dedicatedGpus.length > 1 && (
+        <select
+          value={String(prefs.targetGpuIndex ?? '')}
+          onChange={(e) => onGpuChange(e.target.value)}
+          disabled={busy}
+          style={gpuSelectStyle}
+        >
+          <option value="">Largest VRAM (auto)</option>
+          {dedicatedGpus.map((g) => (
+            <option key={g.index} value={g.index}>
+              {g.name} ({g.vramGB ?? '?'} GB)
+            </option>
+          ))}
+        </select>
+      )}
+      {dirty && (
+        <button
+          onClick={() => void onApply()}
+          disabled={busy}
+          style={{
+            padding: '3px 10px',
+            borderRadius: 6,
+            border: '1px solid var(--accent)',
+            background: 'var(--accent)',
+            color: 'white',
+            cursor: busy ? 'wait' : 'pointer',
+            fontSize: 10,
+            fontWeight: 600,
+          }}
+        >
+          {busy ? 'Applying…' : 'Apply + restart daemon'}
+        </button>
+      )}
+      {status && <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{status}</span>}
+    </div>
+  );
+}
+
+const gpuSelectStyle: React.CSSProperties = {
+  fontSize: 10,
+  padding: '2px 6px',
+  border: '1px solid var(--border)',
+  borderRadius: 4,
+  background: 'var(--bg-primary)',
+  color: 'var(--text-primary)',
+  fontFamily: 'inherit',
+};
 
 function ModelCard({
   model,
@@ -995,6 +1141,9 @@ function fmtBytes(n: number): string {
 function tierColor(t: HardwareTier): string {
   switch (t) {
     case 'workstation': return 'linear-gradient(135deg, #8b5cf6, #ec4899)';
+    // NVIDIA-green for Jetson Thor — visually distinct from generic
+    // workstation while keeping the same "top tier" weight.
+    case 'jetson-thor': return 'linear-gradient(135deg, #22c55e, #76b900)';
     case 'high': return 'linear-gradient(135deg, #3b82f6, #8b5cf6)';
     case 'mid': return 'linear-gradient(135deg, #22c55e, #3b82f6)';
     case 'low': return 'linear-gradient(135deg, #facc15, #22c55e)';

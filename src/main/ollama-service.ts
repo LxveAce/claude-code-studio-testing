@@ -3,6 +3,8 @@ import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { readGpuPrefs, buildDaemonEnv } from './gpu-prefs';
+import { detectHardware } from './hardware-detection';
 
 /**
  * OllamaService — thin wrapper around the local `ollama` CLI.
@@ -371,11 +373,26 @@ export class OllamaService extends EventEmitter {
     this.daemonError = null;
     this.emit('daemon-state', this.daemonState());
 
+    // GPU routing env vars MUST be set on `ollama serve` (the daemon),
+    // not on `ollama run`. Ollama's docs are explicit about this; the
+    // run subcommand is a thin client and never sees these vars.
+    // We compute the env from the user's gpu-prefs + hardware profile.
+    // Auto-mode returns {} so Ollama's own probe owns the decision.
+    let gpuEnv: Record<string, string> = {};
+    try {
+      const hardware = await detectHardware();
+      const prefs = readGpuPrefs();
+      gpuEnv = buildDaemonEnv(prefs, hardware);
+    } catch {
+      // If hardware probe fails, fall back to no overrides — Ollama auto.
+    }
+    const spawnEnv = { ...process.env, ...gpuEnv } as NodeJS.ProcessEnv;
     try {
       this.daemonProcess = spawn(v.cliPath, ['serve'], {
         detached: false, // share process tree so before-quit can kill cleanly
         stdio: 'ignore',
         windowsHide: true,
+        env: spawnEnv,
       });
     } catch (e) {
       this._daemonState = 'failed';
@@ -453,6 +470,23 @@ export class OllamaService extends EventEmitter {
     if (process.platform === 'win32') {
       await new Promise((resolve) => setTimeout(resolve, 800));
     }
+  }
+
+  /**
+   * Stop + restart the daemon. Used after the user changes their GPU
+   * routing preference — the new env vars only take effect on a fresh
+   * `ollama serve` startup. No-op if the daemon isn't ours to manage
+   * (externally-managed Ollama like the Windows tray app would need a
+   * separate restart by the user).
+   */
+  async daemonRestart(): Promise<{ ok: boolean; error: string | null }> {
+    if (!this.daemonProcess) {
+      // Nothing to restart — just try to start fresh. If an external
+      // daemon is up, daemonStart will detect + skip the spawn.
+      return this.daemonStart();
+    }
+    await this.daemonStopAndWait();
+    return this.daemonStart();
   }
 }
 
