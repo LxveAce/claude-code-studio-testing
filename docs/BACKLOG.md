@@ -1,9 +1,86 @@
-# Backlog (post-v1.0)
+# Backlog (post-v3.0.0)
 
 Loose notes on things spitballed but not implemented yet. Add to this
 file as ideas come up; don't bother with formal design until something
 is ready to actually pick up. Each entry: what / why-it-matters / where
 to start.
+
+The historical "★ v3.0.0-beta.N — SHIPPED" sections below are kept as a
+record of how we got to 3.0.0. They are NOT ongoing work; everything in
+those sections shipped on 2026-05-26 as part of the v3.0.0 stable
+release. See `CHANGELOG.md` for the cleaned summary or
+`docs/SESSION_LOG_2026-05-26_v3.0.0_release.md` for the full
+play-by-play.
+
+---
+
+## ★ v3.0.1+ — open ideas
+
+Real work to pick up next. Ordered roughly by impact.
+
+1. **Per-provider API key entry** — the multi-model catalog has slots
+   for OpenAI / Gemini / OpenRouter models but no UI to enter their API
+   keys. Extend `AuthPanel` beyond its current Anthropic-only shape.
+   Each provider stores its key encrypted via Electron `safeStorage`
+   (same pattern as the GitHub PAT). ~3-4 days. Probably the highest-
+   leverage next move because it unlocks the API half of the catalog
+   for real use.
+
+2. **macOS code signing + notarization.** Without it users see "App is
+   damaged" Gatekeeper warning on first launch. Requires Apple
+   Developer Program ($99/yr) + `osxSign` config in electron-builder
+   keyed to env vars set in CI (`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+   `APPLE_TEAM_ID`). Workflow change in `.github/workflows/release.yml`.
+
+3. **Model comparison view.** Run the same prompt against multiple
+   models in parallel, show results side-by-side with a diff highlight.
+   Requires parallel pane management + a synced-input mode. UI-heavy
+   work; own push.
+
+4. **Embedding-RAG over past sessions.** The catalog already includes
+   embedding models (Qwen3 Embedding 0.6B, BGE-M3, Nomic). A real RAG
+   pipeline needs: vault index → chunking strategy → vector store →
+   query UI. ~1-2 weeks.
+
+5. **Per-loaded-model VRAM tracking.** Resource panel shows RAM by
+   bucket but not VRAM per model. Requires vendor GPU SDKs (NVML for
+   NVIDIA, Metal Performance Shaders Counters for Apple Silicon, ROCm
+   SMI for AMD). Or query Ollama's `/api/ps` HTTP endpoint which
+   reports loaded-model sizes — simpler but only covers Ollama-managed
+   models.
+
+6. **Auto-updater test coverage.** The beta-skip gate (Gate 4 in
+   `UpdaterService.start()`) was added blind — write a unit test for
+   the `/-beta\./i` regex so a future version naming change (e.g.,
+   `3.1.0-rc.1`) doesn't accidentally re-enable the updater on a
+   pre-release.
+
+7. **macOS / Linux first-launch onboarding parity with Windows.** The
+   v3 NSIS bootstrap handles Node + Claude CLI install at install time
+   on Windows. macOS / Linux defer to the first-launch CliAuthOnboarding
+   modal. The modal works but UX-wise the Windows install feels
+   smoother. Worth investigating a deb/rpm postinstall hook + a DMG
+   bundled-Node approach to close the gap.
+
+8. **"Open externally" wiring for FileTreePanel.** Right now the panel's
+   "Open externally" button just copies the path + shows an alert (kept
+   as deferred in MULTI_MODEL.md). Could add `shell.openPath()` via a
+   new IPC with the same allowlist pattern the GitHub/models external
+   IPCs use.
+
+9. **Squirrel pipeline removal.** README still mentions the legacy
+   `npm run make` / `npm run publish` (forge + Squirrel) as an escape
+   hatch. Now that v3 is shipped and stable, audit whether any user
+   is still on that path; if not, remove the scripts + forge config.
+
+---
+
+## Historical record (delete this block once it's no longer useful)
+
+The sections below were the running work-in-progress notes for the
+beta.1 → beta.2 → beta.3 → 3.0.0 push. Everything in them shipped.
+Kept for cross-referencing in case a regression appears that traces
+back to one of these changes.
 
 ---
 
@@ -60,56 +137,18 @@ Deferred (each its own ≥1 week push):
 
 ---
 
-## ★ v3.0.0-beta.4 — queued for next push
+## ★ v3.0.0-beta.4 → SHIPPED as 3.0.0 (skipped beta.4 release)
 
-User request, 2026-05-26 (while testing beta.2):
+Both items in this section (easier uninstall + auto-updater 404 fix)
+landed in beta.3 and then v3.0.0 stable. Kept here only so the trail
+from the beta.2 testing-screenshot → beta.3 fix is searchable.
 
-**Easier uninstall throughout.** Concrete asks not yet detailed; capture
-when user provides them. Likely items to investigate:
-- Verify the NSIS uninstaller actually removes everything we create
-  (bundled Node runtime, model-registry.json, debug-dump.jsonl,
-  models-onboarding.json, cli-onboarding.json, github-auth.json,
-  cost-history, lmm-journal, sync state, vault tails).
-- Add a "Reset Claude Code Studio" action inside the app (Settings →
-  Danger zone) that wipes `<userData>` without uninstalling the binary
-  — useful for the "I want to start fresh without going through Windows
-  Settings → Apps" path.
-- The Windows uninstaller currently lives at
-  `%LOCALAPPDATA%\Programs\claude-code-studio\Uninstall Claude Code Studio.exe`.
-  Add a Start Menu shortcut to it AND a "Uninstall Claude Code Studio"
-  action inside the app's Settings panel that just spawns that exe.
-- Consider whether uninstall should optionally also remove the user's
-  Ollama install + pulled models (separate question — likely "no by
-  default, yes with explicit checkbox").
-- Confirm `customUnInstall` in `build/installer.nsh` walks the right
-  directories on uninstall (today it just `RMDir /r` on
-  `$INSTDIR\resources\runtime` — userData isn't touched, which may or
-  may not be intentional).
-
-**Auto-updater 404 on beta builds.** User caught during beta.2 testing
-(2026-05-26 evening):
-
-```
-Cannot find latest.yml in the latest release artifacts
-(https://github.com/LxveAce/claude-code-studio/releases/download/v1.0.0/latest.yml):
-HttpError: 404
-```
-
-Root cause: `electron-updater` queries GitHub for the latest *published*
-release, which is still `v1.0.0` (v2.0.0 is in drafts, beta.x builds
-aren't on origin at all). The v1.0.0 release predates the
-electron-updater migration so it has no `latest.yml` asset — hence the
-404. The 404 currently bubbles up as a visible unhandled exception
-instead of being swallowed gracefully.
-
-Fix options to weigh in beta.3:
-1. **Detect beta builds** (`app.getVersion()` includes `-beta.`) and
-   disable the updater entirely in that case — no GitHub queries.
-   Simplest, no user-facing log noise. Probably right.
-2. Catch the 404 in `UpdaterService` and log-at-debug instead of letting
-   it bubble. Plus #1 — defense in depth.
-3. Long-term: publish a `latest.yml` to the v1.0.0 release retroactively
-   (or to v2.0.0 once promoted) so the updater has something to read.
+- **Easier uninstall** → done. Danger Zone in Settings (Reset + Uninstall).
+  Cross-platform uninstall flow (Windows NSIS / macOS Finder / Linux
+  pkg-mgr). NSIS uninstaller prompts to also remove userData.
+- **Auto-updater 404 on beta builds** → done. Gate 4 in
+  `UpdaterService.start()` checks `/-beta\./i.test(app.getVersion())`
+  and short-circuits to disabled.
 
 ---
 

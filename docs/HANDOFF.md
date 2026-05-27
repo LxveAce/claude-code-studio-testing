@@ -1,5 +1,20 @@
 # Claude Code Studio - Development Handoff
 
+> **⚠ Historical doc — last fully accurate at v1.0 (2026-05-23).**
+> This file describes the original v1 phased development plan and was
+> partially updated during the v1.1 → v2.0 push. For the **current
+> state of the project (v3.0.0)** see:
+>
+> - `docs/SESSION_LOG_2026-05-26_v3.0.0_release.md` — full handoff for
+>   v3.0.0 stable: feature list, build infrastructure quirks, branch
+>   layout, files added/modified, what's queued for v3.0.1+.
+> - `CHANGELOG.md` — at-a-glance per-release summary.
+> - `docs/BACKLOG.md` — open ideas for v3.0.1+.
+>
+> The rest of this file is preserved verbatim as historical context.
+
+---
+
 ## Current State (2026-05-23)
 
 All seven plan phases shipped (v1.0.0 released). The app embeds Claude Code

@@ -24,12 +24,13 @@ Download from the [**latest release**](https://github.com/LxveAce/claude-code-st
 and double-click. The installer downloads Node + the Claude CLI for you and
 launches the app — sign in to Claude in the first-launch modal, done.
 
-- **Windows:** `Claude-Code-Studio-Windows.exe` (NSIS one-click silent install)
-- **macOS Apple Silicon:** `Claude-Code-Studio-Mac.dmg` (drag to Applications)
-- **Linux:** `.AppImage` (portable), `.deb` (Debian/Ubuntu), or `.rpm` (Fedora/RHEL)
+- **Windows:** `Claude-Code-Studio-3.0.0-Windows.exe` (NSIS one-click silent install)
+- **macOS Apple Silicon:** `Claude-Code-Studio-3.0.0-Mac.dmg` (drag to Applications)
+- **Linux:** `Claude-Code-Studio-3.0.0-Linux-Universal.AppImage` (portable),
+  `-Linux-Debian.deb` (Debian/Ubuntu), or `-Linux-Fedora.rpm` (Fedora/RHEL)
 
 Per-platform install details, SmartScreen/Gatekeeper workarounds, and the
-build-from-source instructions are in [Installing v2.0](#installing-v20) below.
+build-from-source instructions are in [Installing v3.0](#installing-v30) below.
 
 ---
 
@@ -85,9 +86,12 @@ v3.0 ships on **Windows**, **macOS** (Apple Silicon), and **Linux**
 installs Node + the Claude CLI for you — no manual prereqs.
 
 v1.0 was Windows-only via Squirrel.Windows. v1.0 users see
-[`docs/MIGRATING_FROM_V1.md`](./docs/MIGRATING_FROM_V1.md) to move to v2.0.
+[`docs/MIGRATING_FROM_V1.md`](./docs/MIGRATING_FROM_V1.md) for the
+one-time uninstall + reinstall path (same migration applies whether
+you're moving to v2 or jumping straight to v3 — both use the new
+electron-builder pipeline).
 
-## Installing v2.0
+## Installing v3.0
 
 Download the right asset for your OS from the
 [latest release](https://github.com/LxveAce/claude-code-studio/releases/latest)
@@ -95,25 +99,28 @@ and follow the per-platform steps below.
 
 ### Windows
 
-1. Download `Claude-Code-Studio-Windows.exe`.
+1. Download `Claude-Code-Studio-3.0.0-Windows.exe`.
 2. Double-click. The NSIS installer downloads Node + the Claude CLI,
-   then launches Studio. No further setup needed.
+   then launches Studio. ~30 seconds total. No further setup needed.
 
-**SmartScreen warning** (first install, until v2.1 code-signing):
+**SmartScreen warning** (first install, until code-signing is added in
+a future release):
 - Click "More info" → "Run anyway".
 - Appears once per machine; subsequent launches are clean.
 
-### macOS (Intel + Apple Silicon)
+### macOS (Apple Silicon, Intel via Rosetta)
 
-1. Download `Claude-Code-Studio-Mac.dmg` (Apple Silicon native; runs on
-   Intel Macs via Rosetta).
+1. Download `Claude-Code-Studio-3.0.0-Mac.dmg` (Apple Silicon native;
+   runs on Intel Macs via Rosetta).
 2. Open the DMG, drag **Claude Code Studio** into **Applications**.
 3. Eject the DMG, open Studio from Launchpad / Spotlight.
 4. First launch: an onboarding modal downloads Node + the Claude CLI
    into `~/Library/Application Support/Claude Code Studio/runtime/`.
-   Click **Sign in to Claude** to complete OAuth in your browser.
+   Click **Sign in to Claude** — the in-session `/login` command opens
+   your browser to complete OAuth.
 
-**Gatekeeper warning** (first launch, until v2.1 notarization):
+**Gatekeeper warning** (first launch, until notarization is added in a
+future release):
 - macOS may say *"Claude Code Studio cannot be opened because the
   developer cannot be verified."*
 - Right-click the app icon → **Open** → confirm in the dialog. Required
@@ -130,11 +137,11 @@ your distro.
 
 #### AppImage (works on any distro, no install needed)
 
-1. Download `Claude-Code-Studio-Linux.AppImage`.
+1. Download `Claude-Code-Studio-3.0.0-Linux-Universal.AppImage`.
 2. Make it executable and run:
    ```bash
-   chmod +x Claude-Code-Studio-Linux.AppImage
-   ./Claude-Code-Studio-Linux.AppImage
+   chmod +x Claude-Code-Studio-3.0.0-Linux-Universal.AppImage
+   ./Claude-Code-Studio-3.0.0-Linux-Universal.AppImage
    ```
 3. First launch: onboarding modal downloads Node + Claude CLI into
    `~/.config/Claude Code Studio/runtime/`. Sign in via the modal.
@@ -145,8 +152,8 @@ If you want a desktop entry + menu integration, drop the AppImage into
 #### Debian / Ubuntu
 
 ```bash
-wget https://github.com/LxveAce/claude-code-studio/releases/latest/download/Claude-Code-Studio-Linux.deb
-sudo dpkg -i Claude-Code-Studio-Linux.deb
+wget https://github.com/LxveAce/claude-code-studio/releases/latest/download/Claude-Code-Studio-3.0.0-Linux-Debian.deb
+sudo dpkg -i Claude-Code-Studio-3.0.0-Linux-Debian.deb
 sudo apt-get install -f   # resolve missing deps if any
 ```
 
@@ -156,15 +163,11 @@ modal as the AppImage.
 #### Fedora / RHEL / CentOS
 
 ```bash
-wget https://github.com/LxveAce/claude-code-studio/releases/latest/download/Claude-Code-Studio-Linux.rpm
-sudo rpm -i Claude-Code-Studio-Linux.rpm
+wget https://github.com/LxveAce/claude-code-studio/releases/latest/download/Claude-Code-Studio-3.0.0-Linux-Fedora.rpm
+sudo dnf install ./Claude-Code-Studio-3.0.0-Linux-Fedora.rpm
 ```
 
-Or via dnf:
-
-```bash
-sudo dnf install ./Claude-Code-Studio-Linux.rpm
-```
+(Or `sudo rpm -i` if you prefer rpm directly.)
 
 **Linux node-pty native build:** the prebuild that ships with node-pty
 covers `linux-x64` with glibc 2.17+. If you're on a very old distro
@@ -179,8 +182,11 @@ Every install path ends at the same first-launch flow:
 2. If missing: onboarding modal shows **Install Claude CLI** button.
    Click → modal streams the install log → ~30-60 seconds → done.
 3. If unauthenticated: modal shows **Sign in to Claude**. Click →
-   `claude login` runs in the embedded terminal → CLI opens your browser
-   → complete OAuth → modal dismisses.
+   `/login` is sent to the running Claude session in the embedded
+   terminal → Claude opens your browser → complete OAuth → modal
+   dismisses. (v3 switched from `claude login` to `/login` because the
+   PTY auto-spawns Claude — sending the bare shell command would just
+   be chat text the running Claude session would respond to.)
 4. Subsequent launches skip the modal entirely (unless the CLI is
    broken or `~/.claude.json` is gone).
 
@@ -193,9 +199,12 @@ Every install path ends at the same first-launch flow:
   Windows users: see [`CONTRIBUTING.md`](./CONTRIBUTING.md#node-22-on-windows).
 - **For node-pty native build on Windows:** Visual Studio Build Tools 2022
   with the C++ workload, plus the Windows 10/11 SDK (10.0.22621+).
-- **For `npm run dist` (v1.1 NSIS installer build):** Windows Developer Mode
-  enabled (Settings → Privacy & Security → For Developers). See
-  [`docs/INSTALLER_REDESIGN.md`](./docs/INSTALLER_REDESIGN.md#build-prerequisite-windows-developer-mode).
+- **For `npm run dist` (NSIS installer build, Windows-only):** Windows
+  Developer Mode enabled (Settings → Privacy & Security → For
+  Developers). Without it, the 7za extraction of electron-builder's
+  `winCodeSign-2.6.0.7z` fails on macOS dylib symlinks. CI runners
+  enable Dev Mode explicitly in `release.yml`; local builds need it
+  on or the 7za wrapper at `docs/SESSION_LOG_2026-05-26_v3.0.0_release.md`.
 
 ### Getting started
 
@@ -209,8 +218,9 @@ npm start              # dev: Vite + Electron with HMR
 ### Build outputs
 
 The build pipeline is electron-builder with per-OS targets. forge is
-kept in scripts as an escape hatch (will be removed once v2.0 is shipped
-and stable).
+kept in scripts as a legacy escape hatch (the Squirrel.Windows pipeline
+used for v1.0). Slated for removal once enough users have migrated past
+v3.0.
 
 ```bash
 # Cross-platform
