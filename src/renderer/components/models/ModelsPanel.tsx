@@ -406,14 +406,14 @@ export function ModelsPanel() {
   }, []);
 
   const handleLaunch = async (m: ModelDefinition) => {
-    if (m.licenseFlag && !confirm(`${m.name} is governed by "${m.license}". This license has commercial-use restrictions worth reviewing before regular use. Continue launch?`)) {
-      return;
-    }
-    // Provider CLI detection for non-Anthropic providers we don't bundle
-    // (gemini, aider). If the CLI isn't installed, surface install
-    // instructions BEFORE we ask for an API key — wrong order would
-    // mean the user enters their key, then we say "actually you need
-    // to install aider first." Detection is cached for the session.
+    // Launch-gate ordering (post-Cat 6 audit fix):
+    //   1) CLI detect → cheapest gate; if the binary isn't there, NOTHING
+    //      else matters yet. Was after license-flag pre-audit; users
+    //      shouldn't have to confirm a license for a tool they don't have.
+    //   2) Per-provider API key → still cheap, no user friction if cached.
+    //   3) License-flag confirm → ask LAST so the user has already shown
+    //      intent to launch (everything else is sorted).
+    //   4) Spawn.
     const detect = await detectModelCli(m);
     if (detect && !detect.installed) {
       setPendingSetup({ model: m, detect });
@@ -435,6 +435,9 @@ export function ModelsPanel() {
       } catch {
         // Provider-auth IPC missing — fall through to direct launch.
       }
+    }
+    if (m.licenseFlag && !confirm(`${m.name} is governed by "${m.license}". This license has commercial-use restrictions worth reviewing before regular use. Continue launch?`)) {
+      return;
     }
     await performLaunch(m);
   };

@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import type { ProviderId } from '../shared/types';
+import { resolveCommandPath } from './cli-resolver';
 
 /**
  * Per-provider CLI availability detection. Used by the model catalog to
@@ -125,17 +126,28 @@ function runProbe(command: string, args: string[]): Promise<string | null> {
     let stdout = '';
     let stderr = '';
     let resolved = false;
+    // Resolve to an absolute path on Windows where bare 'aider' / 'gemini'
+    // need '.exe' / '.cmd' extensions. cli-resolver handles well-known
+    // install dirs + where.exe lookup. Returns the input if unresolved.
+    const resolvedCommand = resolveCommandPath(command);
+    // shell:true on Windows lets the shell handle .cmd / .bat shims that
+    // npm-installed CLIs use. Cheap to do regardless of platform — POSIX
+    // behavior is unchanged since the shell pass-through is transparent.
+    const useShell = process.platform === 'win32';
     let child;
     try {
-      child = spawn(command, args, {
+      child = spawn(resolvedCommand, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: false,
+        shell: useShell,
         windowsHide: true,
       });
     } catch {
       resolve(null);
       return;
     }
+    // 8s — generous for Python CLI cold start (aider can take 3-5s to
+    // import on first run from a slow disk). Was 4s; raised after the
+    // post-Cat 6 audit found false-negative detections.
     const timer = setTimeout(() => {
       if (resolved) return;
       resolved = true;
@@ -145,7 +157,7 @@ function runProbe(command: string, args: string[]): Promise<string | null> {
         // ignore
       }
       resolve(null);
-    }, 4000);
+    }, 8000);
 
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout += chunk.toString('utf8');
@@ -163,14 +175,17 @@ function runProbe(command: string, args: string[]): Promise<string | null> {
       if (resolved) return;
       resolved = true;
       clearTimeout(timer);
-      if (code === 0 || code === null) {
-        // Some CLIs print to stderr; accept either.
-        resolve(stdout || stderr || '');
-      } else {
-        // A non-zero exit on --version still implies the binary exists —
-        // resolve with whatever we captured.
-        resolve(stdout || stderr || '');
+      // Accept output regardless of exit code — some CLIs exit non-zero
+      // on `--version` but still print useful info. The presence of any
+      // output is what tells us the binary exists; the exit code is
+      // not a reliable signal across the CLI ecosystem.
+      const combined = (stdout || '') + (stderr ? '\n' + stderr : '');
+      if (combined.length === 0 && code !== 0) {
+        // Truly no output AND non-zero exit = binary probably not found.
+        resolve(null);
+        return;
       }
+      resolve(combined || '');
     });
   });
 }

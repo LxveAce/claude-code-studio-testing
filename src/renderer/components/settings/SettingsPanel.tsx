@@ -55,35 +55,27 @@ export function SettingsPanel() {
   );
 
   useEffect(() => {
+    // Read the persisted theme name to seed the `activeTheme` highlighted
+    // state in the picker. We do NOT call applyTheme() here — App.tsx is
+    // the single source of truth for applying the theme on startup, so
+    // calling applyTheme() here would race with App.tsx's hydration and
+    // (because applyTheme writes localStorage) could flap the stored key.
+    // After Cat 4 audit (post-RD-pass).
     const stored = localStorage.getItem('claude-studio-theme');
     const parsed = parseThemeKey(stored);
-    // Hydrate custom-theme list first; the active theme may resolve into it.
+    if (parsed?.custom) {
+      setActiveTheme(`custom:${parsed.name}`);
+    } else if (parsed) {
+      const builtin = findThemePreset(parsed.name);
+      if (builtin) setActiveTheme(builtin.name);
+    }
+    // Hydrate the custom-theme list so the grid can render them.
     void (async () => {
       try {
         const customs = await window.electronAPI.themes.list();
         setCustomThemes(customs);
-        if (parsed?.custom) {
-          const match = customs.find((t) => t.name === parsed.name);
-          if (match) {
-            const preset: ThemePreset = { ...match, custom: true };
-            setActiveTheme(`custom:${preset.name}`);
-            applyTheme(preset);
-            return;
-          }
-        }
-        // Fall through to built-in lookup if custom miss / not a custom key.
-        const builtin = findThemePreset(parsed?.name ?? null);
-        if (builtin) {
-          setActiveTheme(builtin.name);
-          applyTheme(builtin);
-        }
       } catch {
         // themes IPC missing — built-ins still work.
-        const builtin = findThemePreset(parsed?.name ?? null);
-        if (builtin) {
-          setActiveTheme(builtin.name);
-          applyTheme(builtin);
-        }
       }
     })();
     let cancelled = false;

@@ -439,6 +439,21 @@ export class OllamaService extends EventEmitter {
     this.daemonError = null;
     this.emit('daemon-state', this.daemonState());
   }
+
+  /**
+   * Stop + wait for the port to actually free up before resolving. On
+   * Windows, `SIGTERM` maps to TerminateProcess which doesn't give Ollama
+   * time to release port 11434. An immediate `daemonStart` after stop can
+   * hit "address already in use." 800ms is empirically enough on a normal
+   * system; on slow VMs the next daemonStart will retry via its own poll
+   * loop, so we don't need to be precise.
+   */
+  async daemonStopAndWait(): Promise<void> {
+    this.daemonStop();
+    if (process.platform === 'win32') {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  }
 }
 
 /** Parse "1.1 GB", "470 MB", "4096" → bytes. Returns 0 on parse failure. */

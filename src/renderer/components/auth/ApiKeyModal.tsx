@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ProviderId } from '../../../shared/types';
 
 const PROVIDER_LABEL: Record<ProviderId, string> = {
@@ -32,6 +32,16 @@ export function ApiKeyModal({ provider, source, onSubmit, onDismiss }: Props) {
   const label = PROVIDER_LABEL[provider];
   const keyUrl = PROVIDER_KEY_URL[provider];
 
+  // Track mount so a slow onSubmit can't setState after unmount and
+  // produce React's "memory leak" warning. Post-Cat 5 audit fix.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const submit = async () => {
     setError(null);
     const trimmed = key.trim();
@@ -43,11 +53,13 @@ export function ApiKeyModal({ provider, source, onSubmit, onDismiss }: Props) {
     try {
       await onSubmit(trimmed);
     } catch (e) {
-      setError((e as Error).message ?? String(e));
-      setBusy(false);
+      if (mountedRef.current) {
+        setError((e as Error).message ?? String(e));
+        setBusy(false);
+      }
       return;
     }
-    setBusy(false);
+    if (mountedRef.current) setBusy(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {

@@ -84,16 +84,16 @@ export const MODEL_CATALOG_SEED: ModelDefinition[] = [
   {
     id: 'api.openrouter.aider',
     name: 'OpenRouter (via Aider)',
-    description: "Aider talking to OpenRouter's OpenAI-compatible endpoint — one key, many models.",
+    description: "Aider routing to OpenRouter — one key, many models. litellm handles the routing natively from the `openrouter/` model prefix.",
     category: 'api',
     provider: 'OpenRouter',
     command: 'aider',
-    args: [
-      '--openai-api-base',
-      'https://openrouter.ai/api/v1',
-      '--model',
-      'openrouter/anthropic/claude-3.5-sonnet',
-    ],
+    // Aider's underlying litellm reads OPENROUTER_API_KEY when the model
+    // id is prefixed `openrouter/`. No --openai-api-base override needed
+    // (that was a fix-pass correction — using both flags would conflict
+    // because --openai-api-base reroutes ALL OpenAI traffic, including
+    // litellm's internal OpenRouter handler).
+    args: ['--model', 'openrouter/anthropic/claude-3.5-sonnet'],
     roles: ['polyglot-code', 'agentic', 'general-chat'],
     badge: 'OSS',
     recommendedFor: 'Use when you want to A/B many providers without managing a key per provider. One OPENROUTER_API_KEY routes everywhere.',

@@ -44,11 +44,18 @@ export function ThemeEditor({
     onLivePreview(preview);
   }, [preview, onLivePreview]);
 
+  // Capture the latest `onRestoreActiveTheme` in a ref so the unmount
+  // cleanup always calls the current callback even if the parent
+  // re-renders with a new closure. Avoids the "stale callback on
+  // unmount" foot-gun the original empty-deps useEffect had.
+  const restoreRef = React.useRef(onRestoreActiveTheme);
+  useEffect(() => {
+    restoreRef.current = onRestoreActiveTheme;
+  }, [onRestoreActiveTheme]);
   useEffect(() => {
     return () => {
-      onRestoreActiveTheme();
+      restoreRef.current();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = () => {
