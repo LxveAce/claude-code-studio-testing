@@ -3,8 +3,13 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { BrowserWindow } from 'electron';
+import { net } from 'electron';
 import type {
   HFAuditEntry,
+  HFDownloadProgress,
+  HFDownloadResult,
+  HFGgufMetadata,
   HFGgufVariant,
   HFModelCard,
   HFSearchHit,
@@ -103,6 +108,138 @@ export class HuggingFaceService {
 
   // ---- public surface ----
 
+  /** Direct GGUF file download to <userData>/hf-cache/<repo>/<file>.
+   *  Streams via Electron's net module + emits progress events to all
+   *  open windows.  Caller passes a stable transferId so the renderer
+   *  can correlate progress events to a specific download.
+   *
+   *  Stores at `<resolvedCache>/models--<org>--<name>/blobs/<file>` to
+   *  mimic Hugging Face's hub layout — that way our Cached tab listing
+   *  recognises the result and the user can swap to the upstream HF
+   *  cache without re-downloading.
+   */
+  async downloadFile(opts: {
+    repoId: string;
+    fileName: string;
+    transferId?: string;
+    windowSink?: BrowserWindow[];
+  }): Promise<HFDownloadResult> {
+    if (!isRepoId(opts.repoId)) throw new Error('invalid repoId');
+    if (!isSafeFileName(opts.fileName)) throw new Error('invalid fileName');
+    const broadcast = (event: HFDownloadProgress) => {
+      try {
+        const windows = opts.windowSink ?? [];
+        for (const w of windows) {
+          if (!w.isDestroyed()) w.webContents.send('hf:download-progress', event);
+        }
+      } catch {
+        // best-effort
+      }
+    };
+    const root = this.getCachePath();
+    const repoDir = path.join(root, `models--${opts.repoId.replace('/', '--')}`, 'blobs');
+    // Path-traversal guard.
+    const repoReal = path.resolve(repoDir);
+    const rootReal = path.resolve(root);
+    if (!repoReal.startsWith(rootReal + path.sep) && repoReal !== rootReal) {
+      throw new Error('cache target escapes the cache root');
+    }
+    fs.mkdirSync(repoDir, { recursive: true });
+    const destPath = path.join(repoDir, opts.fileName);
+    const tmpPath = `${destPath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.part`;
+    const url = `https://huggingface.co/${opts.repoId}/resolve/main/${encodeURIComponent(opts.fileName)}`;
+    let bytesCompleted = 0;
+    let bytesTotal: number | null = null;
+    let writeStream: fs.WriteStream | null = null;
+    try {
+      const request = net.request({ method: 'GET', url, redirect: 'follow' });
+      request.setHeader('User-Agent', 'Catalyst-UI/4.x (+https://github.com/LxveAce/catalyst-ui)');
+      writeStream = fs.createWriteStream(tmpPath);
+      await new Promise<void>((resolve, reject) => {
+        let lastBroadcastAt = 0;
+        request.on('response', (response) => {
+          if (response.statusCode >= 400) {
+            reject(new Error(`HTTP ${response.statusCode} fetching ${url}`));
+            return;
+          }
+          const lenHeader = response.headers['content-length'];
+          if (typeof lenHeader === 'string') {
+            const n = Number(lenHeader);
+            if (Number.isFinite(n) && n > 0) bytesTotal = n;
+          } else if (Array.isArray(lenHeader) && lenHeader[0]) {
+            const n = Number(lenHeader[0]);
+            if (Number.isFinite(n) && n > 0) bytesTotal = n;
+          }
+          response.on('data', (chunk: Buffer) => {
+            bytesCompleted += chunk.length;
+            if (writeStream) writeStream.write(chunk);
+            // Throttle progress events to ~10/s.
+            const now = Date.now();
+            if (now - lastBroadcastAt >= 100) {
+              lastBroadcastAt = now;
+              broadcast({
+                repoId: opts.repoId,
+                fileName: opts.fileName,
+                bytesCompleted,
+                bytesTotal,
+                percent:
+                  bytesTotal && bytesTotal > 0
+                    ? Math.max(0, Math.min(100, Math.round((bytesCompleted / bytesTotal) * 100)))
+                    : null,
+                done: false,
+                error: null,
+              });
+            }
+          });
+          response.on('end', () => {
+            if (writeStream) {
+              writeStream.end(() => resolve());
+            } else {
+              resolve();
+            }
+          });
+          response.on('error', (err: Error) => reject(err));
+        });
+        request.on('error', (err: Error) => reject(err));
+        request.end();
+      });
+      // Atomic rename.
+      fs.renameSync(tmpPath, destPath);
+      broadcast({
+        repoId: opts.repoId,
+        fileName: opts.fileName,
+        bytesCompleted,
+        bytesTotal,
+        percent: 100,
+        done: true,
+        error: null,
+      });
+      return { ok: true, destPath, bytesWritten: bytesCompleted, error: null };
+    } catch (e) {
+      try {
+        if (writeStream) writeStream.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+      } catch {
+        /* ignore */
+      }
+      const msg = e instanceof Error ? e.message : String(e);
+      broadcast({
+        repoId: opts.repoId,
+        fileName: opts.fileName,
+        bytesCompleted,
+        bytesTotal,
+        percent: null,
+        done: false,
+        error: msg,
+      });
+      return { ok: false, destPath: null, bytesWritten: bytesCompleted, error: msg };
+    }
+  }
+
   /** List models matching the query.  Falls back to a reasonable
    *  default-sorted list if no query is provided. */
   async search(opts: HFSearchOptions): Promise<HFSearchHit[]> {
@@ -131,37 +268,53 @@ export class HuggingFaceService {
     if (task) searchParts.push(task);
     if (library) searchParts.push(library);
     const searchString = searchParts.join(' ') || undefined;
+    // Sort mapping for the Hub API (the SDK forwards `sort` as a
+    // top-level query param).  Default to `downloads` desc when
+    // unspecified to match user expectations.
+    const sortMap: Record<NonNullable<HFSearchOptions['sort']>, string> = {
+      downloads: 'downloads',
+      likes: 'likes',
+      modified: 'lastModified',
+      created: 'createdAt',
+      trending: 'trendingScore',
+    };
+    const sortKey = opts.sort ? sortMap[opts.sort] : 'downloads';
+
     try {
-      // @huggingface/hub's listModels takes `search` as a structured
-      // object ({ query, task, owner, tags, ... }).  We pass query
-      // (free-form text) and let the SDK forward it to the API.
-      //
-      // v4.0.2: re-add `additionalFields: ['tags']` (without pipeline_tag,
-      // which was the original duplicate that v4.0.1 worked around).
-      // `tags` is genuinely needed by the GGUF filter and the result
-      // card tag list; without it the GGUF Only filter returns zero
-      // results because no model has a tags array to test.
+      // v4.0.2 deep-debug: measured behaviour informs the field set.
+      // The Hub's default expand list (returned without any
+      // additionalFields) is fixed at: pipeline_tag, private, gated,
+      // downloads, lastModified, likes.  Adding any of those triggers
+      // "expand[N] contains a duplicate value".  `license` and
+      // `description` are NOT valid expand values at all per the API's
+      // own error message.  Useful values NOT in the defaults:
+      //   tags (array), library_name (string), gguf (object — present
+      //   only on GGUF repos!), cardData, downloadsAllTime, siblings,
+      //   config, sha, baseModels, author, trendingScore, widgetData.
+      // We request the three we actually render: tags, library_name,
+      // gguf.  Detecting GGUF via `gguf !== undefined` is the
+      // authoritative signal — no more tag-string guessing.
       for await (const raw of mod.listModels({
         search: searchString ? { query: searchString } : undefined,
         limit: maxScan,
-        additionalFields: ['tags'],
+        additionalFields: ['tags', 'library_name', 'gguf'],
+        sort: sortKey,
       } as Parameters<typeof mod.listModels>[0])) {
         const model = raw as ModelEntryLoose;
         scanned++;
         const tags: string[] = Array.isArray(model.tags)
           ? model.tags.filter((t): t is string => typeof t === 'string')
           : [];
-        if (ggufOnly) {
-          const hasGguf = tags.some((t) => t.toLowerCase().includes('gguf'));
-          if (!hasGguf) continue;
-        }
+        const hasGguf = model.gguf != null && typeof model.gguf === 'object';
+        if (ggufOnly && !hasGguf) continue;
         results.push({
           id: String(model.name ?? ''),
           author: String(model.name ?? '').split('/')[0] ?? '',
           downloads: typeof model.downloads === 'number' ? model.downloads : 0,
           likes: typeof model.likes === 'number' ? model.likes : 0,
           tags: tags.slice(0, 20),
-          pipelineTag: typeof model.pipeline_tag === 'string' ? model.pipeline_tag : null,
+          pipelineTag: typeof model.task === 'string' ? model.task : null,
+          libraryName: typeof model.library_name === 'string' ? model.library_name : null,
           gated: !!model.gated,
           updatedAt:
             model.updatedAt instanceof Date
@@ -169,6 +322,7 @@ export class HuggingFaceService {
               : typeof model.updatedAt === 'string'
                 ? model.updatedAt
                 : null,
+          ggufMeta: hasGguf ? extractGgufMeta(model.gguf as Record<string, unknown>) : null,
         });
         if (results.length >= limit) break;
         if (scanned >= maxScan) break;
@@ -184,61 +338,94 @@ export class HuggingFaceService {
     if (!isRepoId(repoId)) throw new Error('invalid repoId');
     const mod = await this.loadHubModule();
     try {
-      // v4.0.2 (amended): the HF API rejects `description` as an expand
-      // field — only the values listed in its error message are valid
-      // (author, baseModels, cardData, config, ..., tags, gguf, etc.).
-      // `description` isn't one of them; the README body isn't surfaced
-      // through this endpoint at all.  Keep `tags` (valid + needed for
-      // the chip row) and drop `description`.  The renderer falls back
-      // to "no description shown" — the full model card is one click
-      // away via the "Web ↗" button.
+      // v4.0.2 deep-debug: full useful expand set per measured API.
+      // - cardData: contains license (string), license_link, base_model,
+      //   pipeline_tag — the description field on cardData is empty for
+      //   the vast majority of repos (the README body isn't surfaced
+      //   here at all; the Web ↗ button is the path for that).
+      // - siblings: file listing as `{ rfilename }` objects.  Faster
+      //   than a separate listFiles() round trip and includes EVERY
+      //   file (listFiles paginates).
+      // - gguf: structured GGUF metadata (architecture, context_length,
+      //   chat_template, totalFileSize).  Only present on GGUF repos.
+      // - tags: array of tags.
+      // - library_name: e.g. "transformers" or undefined for GGUF.
       const infoRaw = await mod.modelInfo({
         name: repoId,
-        additionalFields: ['tags'],
+        additionalFields: ['tags', 'cardData', 'siblings', 'gguf', 'library_name'],
       } as Parameters<typeof mod.modelInfo>[0]);
       const info = infoRaw as ModelInfoLoose;
+      // siblings is the authoritative file list.  Fall back to
+      // listFiles only if siblings is empty/absent for some reason.
       const files: { path: string; size: number | null }[] = [];
-      try {
-        for await (const f of mod.listFiles({ repo: { type: 'model', name: repoId } })) {
-          if (typeof f.path !== 'string') continue;
-          files.push({
-            path: f.path,
-            size: typeof f.size === 'number' ? f.size : null,
-          });
-          if (files.length >= 200) break;
+      const siblings = Array.isArray(info.siblings) ? info.siblings : [];
+      for (const s of siblings) {
+        const fname = (s as { rfilename?: unknown }).rfilename;
+        if (typeof fname !== 'string') continue;
+        files.push({ path: fname, size: null });
+      }
+      if (files.length === 0) {
+        try {
+          for await (const f of mod.listFiles({ repo: { type: 'model', name: repoId } })) {
+            if (typeof f.path !== 'string') continue;
+            files.push({
+              path: f.path,
+              size: typeof f.size === 'number' ? f.size : null,
+            });
+            if (files.length >= 200) break;
+          }
+        } catch {
+          // gated/auth — surface whatever metadata we already have.
         }
-      } catch {
-        // listFiles may fail on gated models w/o a token; fall through
-        // with whatever metadata modelInfo returned.
       }
       const ggufFiles = files.filter((f) => /\.gguf$/i.test(f.path));
-      const gguf: HFGgufVariant[] = ggufFiles.map((f) => {
-        const quant = extractQuantTag(f.path);
-        return {
-          fileName: f.path,
-          quant,
-          sizeBytes: f.size ?? null,
-        };
-      });
+      const gguf: HFGgufVariant[] = ggufFiles.map((f) => ({
+        fileName: f.path,
+        quant: extractQuantTag(f.path),
+        sizeBytes: f.size ?? null,
+      }));
+      const cardData = (info.cardData ?? {}) as Record<string, unknown>;
+      const license =
+        typeof cardData.license === 'string'
+          ? cardData.license
+          : typeof cardData.license_name === 'string'
+            ? (cardData.license_name as string)
+            : null;
+      const licenseLink =
+        typeof cardData.license_link === 'string' ? (cardData.license_link as string) : null;
+      const cardDescription =
+        typeof cardData.description === 'string' && (cardData.description as string).trim().length > 0
+          ? (cardData.description as string)
+          : null;
+      const ggufMeta =
+        info.gguf != null && typeof info.gguf === 'object'
+          ? extractGgufMeta(info.gguf as Record<string, unknown>)
+          : null;
       return {
         id: repoId,
-        description: typeof info.description === 'string' ? info.description : null,
+        description: cardDescription,
         downloads: typeof info.downloads === 'number' ? info.downloads : 0,
         likes: typeof info.likes === 'number' ? info.likes : 0,
         tags: Array.isArray(info.tags)
           ? info.tags.filter((t): t is string => typeof t === 'string').slice(0, 60)
           : [],
-        pipelineTag: typeof info.pipeline_tag === 'string' ? info.pipeline_tag : null,
-        license: typeof info.license === 'string' ? info.license : null,
+        pipelineTag: typeof info.task === 'string' ? info.task : null,
+        libraryName: typeof info.library_name === 'string' ? info.library_name : null,
+        license,
+        licenseLink,
         gated: !!info.gated,
         files,
         gguf,
+        ggufMeta,
+        webUrl: `https://huggingface.co/${repoId}`,
         updatedAt:
           info.updatedAt instanceof Date
             ? info.updatedAt.toISOString()
             : typeof info.updatedAt === 'string'
               ? info.updatedAt
               : null,
+        createdAt:
+          typeof info.createdAt === 'string' ? info.createdAt : null,
       };
     } catch (e) {
       throw new Error(`HF modelInfo failed: ${(e as Error).message ?? String(e)}`);
@@ -468,13 +655,48 @@ interface ModelEntryLoose {
   likes?: number;
   gated?: boolean;
   tags?: unknown[];
-  pipeline_tag?: string;
+  /** @huggingface/hub maps pipeline_tag → `task` on the response. */
+  task?: string;
+  library_name?: string;
+  gguf?: unknown;
   updatedAt?: Date | string;
+  createdAt?: string;
 }
 
 interface ModelInfoLoose extends ModelEntryLoose {
   description?: string;
   license?: string;
+  cardData?: unknown;
+  siblings?: unknown[];
+}
+
+function extractGgufMeta(g: Record<string, unknown>): HFGgufMetadata {
+  return {
+    architecture: typeof g.architecture === 'string' ? g.architecture : null,
+    contextLength:
+      typeof g.context_length === 'number' && Number.isFinite(g.context_length)
+        ? (g.context_length as number)
+        : null,
+    totalParams:
+      typeof g.total === 'number' && Number.isFinite(g.total) ? (g.total as number) : null,
+    totalFileSize:
+      typeof g.totalFileSize === 'number' && Number.isFinite(g.totalFileSize)
+        ? (g.totalFileSize as number)
+        : null,
+  };
+}
+
+function isSafeFileName(s: unknown): s is string {
+  // Refuse path separators, control chars, leading dots/dashes, parent
+  // segments — anything that could escape the cache root.
+  return (
+    typeof s === 'string' &&
+    s.length > 0 &&
+    s.length <= 256 &&
+    /^[A-Za-z0-9_.\-]+$/.test(s) &&
+    !s.startsWith('.') &&
+    !s.includes('..')
+  );
 }
 
 

@@ -286,6 +286,13 @@ interface Window {
       ) => Promise<import('./shared/types').ModelLaunchResult>;
       getResearchLog: () => Promise<import('./shared/types').HFAuditEntry[]>;
       clearResearchLog: () => Promise<boolean>;
+      download: (
+        repoId: string,
+        fileName: string
+      ) => Promise<import('./shared/types').HFDownloadResult>;
+      onDownloadProgress: (
+        cb: (event: import('./shared/types').HFDownloadProgress) => void
+      ) => () => void;
     };
     tray: {
       getSettings: () => Promise<import('./shared/types').TraySettings>;
