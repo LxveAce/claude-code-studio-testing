@@ -297,6 +297,196 @@ async function driveApp(cdp) {
   // Settle for any late console events.
   await sleep(2000);
 
+  // === Extended pass: tab gestures + Commands family chip + palette ========
+  // Added when wiring TerminalTabs + the Commands-tab-mirror change so we
+  // catch regressions in the new UI surfaces, not just bare panel renders.
+  // Each step records a synthetic event with `currentTab = '(ext:<name>)'`
+  // and asserts a DOM invariant; failures show up in the summary as
+  // exception events (via `throw`) which the existing per-tab tally
+  // counts as ❌.
+
+  const extResults = [];
+  async function evalExpr(expression) {
+    const r = await cdp.send('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      userGesture: true,
+    });
+    if (r.exceptionDetails) {
+      throw new Error(
+        r.exceptionDetails.text +
+          ' ' +
+          (r.exceptionDetails.exception?.description?.split('\n')[0] ?? '')
+      );
+    }
+    return r.result.value;
+  }
+  async function assertEq(name, expected, actualExpr) {
+    try {
+      const actual = await evalExpr(actualExpr);
+      const pass = actual === expected;
+      extResults.push({ name, expected, actual, pass });
+      events.push({
+        tab: `(ext:${name})`,
+        kind: pass ? 'info' : 'console.error',
+        text: pass
+          ? `OK: ${name} = ${JSON.stringify(actual)}`
+          : `FAIL: ${name} expected=${JSON.stringify(expected)} actual=${JSON.stringify(actual)}`,
+      });
+    } catch (e) {
+      extResults.push({ name, expected, actual: 'ERROR', pass: false });
+      events.push({
+        tab: `(ext:${name})`,
+        kind: 'exception',
+        text: `${name}: ${e.message}`,
+      });
+    }
+  }
+  async function clickSelector(name, selector, index = 0) {
+    const expr = `(() => {
+      const els = document.querySelectorAll(${JSON.stringify(selector)});
+      const el = els[${index}];
+      if (!el) return { ok: false, reason: 'no element matched ' + ${JSON.stringify(selector)} };
+      el.scrollIntoView({ block: 'center' });
+      el.click();
+      return { ok: true };
+    })()`;
+    const r = await evalExpr(expr);
+    events.push({
+      tab: `(ext:${name})`,
+      kind: r?.ok ? 'info' : 'click-error',
+      text: `click ${selector}[${index}]: ${JSON.stringify(r)}`,
+    });
+  }
+  async function dispatchKey(key, modifiers = 0) {
+    // Modifiers bitmask: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift. We use keydown
+    // then keyup; React listens to keydown for the global hotkey dispatcher.
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key,
+      code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
+      modifiers,
+    });
+    await cdp.send('Input.dispatchKeyEvent', {
+      type: 'keyUp',
+      key,
+      code: key.length === 1 ? `Key${key.toUpperCase()}` : key,
+      modifiers,
+    });
+  }
+
+  // Make sure we're on the Terminal panel so TerminalTabs is visible.
+  currentTab = '(ext:setup)';
+  await clickSelector('switch-to-terminal', '[data-panel="terminal"]');
+  await sleep(400);
+
+  // --- Test 1: tab strip count + button --------------------------------------
+  currentTab = '(ext:tab-add)';
+  const initialCount = await evalExpr(
+    `document.querySelectorAll('[data-terminal-tab]').length`
+  );
+  events.push({
+    tab: '(ext:tab-add)',
+    kind: 'info',
+    text: `initial tab count: ${initialCount}`,
+  });
+  await clickSelector('new-claude-tab', '[aria-label="New Claude tab"]');
+  await sleep(500);
+  await assertEq(
+    'tab-add-increments-count',
+    initialCount + 1,
+    `document.querySelectorAll('[data-terminal-tab]').length`
+  );
+  await assertEq(
+    'tab-add-newest-is-active',
+    'true',
+    `(() => {
+      const tabs = document.querySelectorAll('[data-terminal-tab]');
+      const last = tabs[tabs.length - 1];
+      return last?.getAttribute('data-tab-active') ?? 'none';
+    })()`
+  );
+
+  // --- Test 2: close the new tab returns to initial count --------------------
+  currentTab = '(ext:tab-close)';
+  await clickSelector(
+    'close-newest-tab',
+    '[data-terminal-tab] [aria-label^="Close "]',
+    initialCount // close button under the newest tab
+  );
+  await sleep(500);
+  await assertEq(
+    'tab-close-restores-count',
+    initialCount,
+    `document.querySelectorAll('[data-terminal-tab]').length`
+  );
+
+  // --- Test 3: profile picker open / Esc close -------------------------------
+  currentTab = '(ext:picker)';
+  await clickSelector('open-picker', '[aria-label="Pick a profile"]');
+  await sleep(300);
+  await assertEq(
+    'picker-opens',
+    1,
+    `document.querySelectorAll('[data-profile-picker]').length`
+  );
+  // Press Escape to close.
+  await dispatchKey('Escape', 0);
+  await sleep(300);
+  await assertEq(
+    'picker-closes-on-esc',
+    0,
+    `document.querySelectorAll('[data-profile-picker]').length`
+  );
+
+  // --- Test 4: Commands family chip on a Claude tab --------------------------
+  currentTab = '(ext:family-chip)';
+  await clickSelector('switch-to-commands', '[data-panel="commands"]');
+  await sleep(400);
+  await assertEq(
+    'commands-chip-is-claude',
+    'claude',
+    `document.querySelector('[data-family-chip]')?.getAttribute('data-family-chip') ?? 'none'`
+  );
+  // textContent ignores CSS text-transform — the literal config label is
+  // 'Claude' (rendered as CLAUDE via text-transform: uppercase).
+  await assertEq(
+    'commands-chip-label-text',
+    'Claude',
+    `document.querySelector('[data-family-chip]')?.textContent?.trim() ?? 'none'`
+  );
+
+  // --- Test 5: Ctrl+Shift+P opens the palette, Esc closes it -----------------
+  currentTab = '(ext:palette)';
+  // Switch back to Terminal so the palette doesn't open over CommandsPanel
+  // (cosmetic only, but keeps the focus state predictable).
+  await clickSelector('switch-back-terminal', '[data-panel="terminal"]');
+  await sleep(300);
+  // Ctrl+Shift+P (Ctrl=2 | Shift=8 = 10 in CDP modifier bitmask).
+  await dispatchKey('p', 10);
+  await sleep(400);
+  await assertEq(
+    'palette-opens-on-hotkey',
+    1,
+    `document.querySelectorAll('input[placeholder="Type a command, snippet, or theme…"]').length`
+  );
+  await dispatchKey('Escape', 0);
+  await sleep(300);
+  await assertEq(
+    'palette-closes-on-esc',
+    0,
+    `document.querySelectorAll('input[placeholder="Type a command, snippet, or theme…"]').length`
+  );
+
+  currentTab = '(ext:summary)';
+  const passCount = extResults.filter((r) => r.pass).length;
+  const failCount = extResults.length - passCount;
+  events.push({
+    tab: '(ext:summary)',
+    kind: failCount === 0 ? 'info' : 'console.error',
+    text: `Extended verification: ${passCount}/${extResults.length} assertions passed${failCount > 0 ? ` (${failCount} FAILED)` : ''}`,
+  });
+
   return { buttons, visited, events };
 }
 
