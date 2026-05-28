@@ -10,6 +10,83 @@ import type {
 
 type SubTab = 'browse' | 'cached' | 'research';
 
+/**
+ * Curated research-catalog seeds.  v4.0.2 — the user reported the
+ * Research tab returned no models even with the search working, so we
+ * package a small set of well-known uncensored / abliterated GGUF
+ * models as a starting point.  Each entry shows even when the live
+ * search has zero hits, giving users something runnable on day one.
+ *
+ * Selection criteria: GGUF available; sub-12B so they run on consumer
+ * hardware; well-known uploaders; either an "uncensored" or "abliterated"
+ * lineage so they fit the Research-tab framing.  Sized-tier badge
+ * gives the user a quick "will this run on my box" answer.
+ */
+const RESEARCH_CURATED: Array<{
+  repoId: string;
+  quant: string;
+  paramsLabel: string;
+  tier: 'low' | 'mid' | 'high';
+  description: string;
+}> = [
+  {
+    repoId: 'failspy/llama-3-8b-Instruct-abliterated-v3-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Llama 3 8B with the refusal direction ablated (failspy method). Same intelligence, no canned "I can\'t help with that".',
+  },
+  {
+    repoId: 'mradermacher/dolphin-2.9-llama3-8b-i1-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Dolphin 2.9 fine-tune of Llama 3 8B. Uncensored conversational model, strong instruction following.',
+  },
+  {
+    repoId: 'TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '7B',
+    tier: 'low',
+    description: 'Classic Wizard-Vicuna 7B uncensored. Lower bar to run; useful baseline for comparison.',
+  },
+  {
+    repoId: 'TheBloke/Wizard-Vicuna-13B-Uncensored-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '13B',
+    tier: 'mid',
+    description: 'Same fine-tune as the 7B but on the 13B Llama 2 base. More capable, needs ~10 GB VRAM at Q4_K_M.',
+  },
+  {
+    repoId: 'bartowski/Hermes-3-Llama-3.1-8B-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'NousResearch Hermes 3 on Llama 3.1 8B. Not "uncensored" per se, but uses neutral alignment with minimal refusals.',
+  },
+  {
+    repoId: 'mradermacher/dolphin-2.9.4-llama3.1-8b-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Newer Dolphin 2.9.4 fine-tune of Llama 3.1 8B. Reduced safety filters; strong reasoning + coding.',
+  },
+  {
+    repoId: 'failspy/Llama-3-70B-Instruct-abliterated-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '70B',
+    tier: 'high',
+    description: 'Abliterated Llama 3 70B — substantial capability. Needs ~40+ GB VRAM at Q4_K_M.',
+  },
+  {
+    repoId: 'TheBloke/dolphin-2.5-mixtral-8x7b-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: 'MoE 8x7B',
+    tier: 'high',
+    description: 'Dolphin 2.5 on Mixtral 8x7B. Strong uncensored MoE. Needs ~26 GB VRAM at Q4_K_M.',
+  },
+];
+
 const ROLE_FILTERS = [
   { value: '', label: 'Any task' },
   { value: 'text-generation', label: 'Text generation' },
@@ -93,7 +170,11 @@ export function HFPanel() {
 function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
   const [query, setQuery] = useState('');
   const [task, setTask] = useState<string>('');
-  const [ggufOnly, setGgufOnly] = useState(true);
+  // v4.0.2: default OFF.  GGUF (GPT-Generated Unified Format) is the
+  // quantized weight format llama.cpp / Ollama consume.  Filtering to
+  // GGUF only is useful when you know you'll Import to Ollama, but it
+  // hides the broader Hub.  Keep it accessible but unchecked by default.
+  const [ggufOnly, setGgufOnly] = useState(false);
   const [results, setResults] = useState<HFSearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [openCardId, setOpenCardId] = useState<string | null>(null);
@@ -150,7 +231,10 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
         </select>
-        <label style={chkStyle}>
+        <label
+          style={chkStyle}
+          title="GGUF = the quantized weight format llama.cpp / Ollama consume. Check this to only see models you can import to Ollama directly."
+        >
           <input
             type="checkbox"
             checked={ggufOnly}
@@ -536,10 +620,101 @@ function ResearchTab({
         </button>
       </div>
       {err && <div role="alert" style={errBannerStyle}>{err}</div>}
+      <CuratedResearchList onErr={setErr} />
       <ResearchBrowse onErr={setErr} />
       <ResearchAuditLog onErr={setErr} />
     </div>
   );
+}
+
+function CuratedResearchList({ onErr }: { onErr: (msg: string | null) => void }) {
+  const [launchState, setLaunchState] = useState<Record<string, 'launching' | 'launched' | null>>({});
+  const launchTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  useEffect(() => () => {
+    for (const t of Object.values(launchTimers.current)) clearTimeout(t);
+  }, []);
+
+  const handleImport = async (repoId: string, quant: string) => {
+    const key = `${repoId}:${quant}`;
+    setLaunchState((s) => ({ ...s, [key]: 'launching' }));
+    try {
+      const cwd = await window.electronAPI.git.getCwd().catch(() => undefined);
+      const r = await window.electronAPI.hf.importAndLaunch(repoId, quant, cwd ?? undefined, true);
+      if (!r.ok) {
+        onErr(`Import failed: ${r.error ?? 'unknown error'}`);
+        setLaunchState((s) => ({ ...s, [key]: null }));
+        return;
+      }
+      setLaunchState((s) => ({ ...s, [key]: 'launched' }));
+      if (launchTimers.current[key]) clearTimeout(launchTimers.current[key]);
+      launchTimers.current[key] = setTimeout(() => {
+        setLaunchState((s) => ({ ...s, [key]: null }));
+      }, 4000);
+    } catch (e) {
+      onErr(formatError(e));
+      setLaunchState((s) => ({ ...s, [key]: null }));
+    }
+  };
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+        Recommended research models <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({RESEARCH_CURATED.length} curated)</span>
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10, lineHeight: 1.5 }}>
+        Well-known uncensored / abliterated GGUF models — packaged so the tab has something runnable on day one.
+        Each one imports through Ollama just like a regular HF Browse import.
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {RESEARCH_CURATED.map((m) => {
+          const key = `${m.repoId}:${m.quant}`;
+          const state = launchState[key];
+          return (
+            <div
+              key={key}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                padding: '8px 10px',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: 4,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {m.repoId}
+                  <span style={tagChipStyle}>{m.paramsLabel}</span>
+                  <span style={tagChipStyle}>{m.quant}</span>
+                  <span style={{ ...tagChipStyle, background: tierColor(m.tier) }}>{m.tier}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.4 }}>
+                  {m.description}
+                </div>
+              </div>
+              <button
+                onClick={() => void handleImport(m.repoId, m.quant)}
+                disabled={state === 'launching'}
+                style={state === 'launched' ? { ...smallBtnStyle, color: '#22c55e', borderColor: '#22c55e' } : smallBtnStyle}
+                title="Adds to Models with a Research badge and starts via Ollama"
+              >
+                {state === 'launching' ? 'Launching…' : state === 'launched' ? '✓ Launched' : 'Import'}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function tierColor(tier: 'low' | 'mid' | 'high'): string {
+  switch (tier) {
+    case 'low': return 'rgba(34, 197, 94, 0.15)';
+    case 'mid': return 'rgba(59, 130, 246, 0.15)';
+    case 'high': return 'rgba(168, 85, 247, 0.15)';
+  }
 }
 
 function ResearchBrowse({ onErr }: { onErr: (msg: string | null) => void }) {

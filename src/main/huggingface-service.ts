@@ -136,16 +136,15 @@ export class HuggingFaceService {
       // object ({ query, task, owner, tags, ... }).  We pass query
       // (free-form text) and let the SDK forward it to the API.
       //
-      // v4.0.1 hotfix: do NOT pass additionalFields.  The SDK already
-      // includes the fields we read (pipeline_tag, gated, lastModified,
-      // downloads, likes) in its default expand list.  Passing
-      // additionalFields with values that overlap the defaults made the
-      // API reject the request with "expand[N] contains a duplicate
-      // value".  `tags` isn't in the default list, but the renderer
-      // tolerates an empty tags array, so we accept the cost for now.
+      // v4.0.2: re-add `additionalFields: ['tags']` (without pipeline_tag,
+      // which was the original duplicate that v4.0.1 worked around).
+      // `tags` is genuinely needed by the GGUF filter and the result
+      // card tag list; without it the GGUF Only filter returns zero
+      // results because no model has a tags array to test.
       for await (const raw of mod.listModels({
         search: searchString ? { query: searchString } : undefined,
         limit: maxScan,
+        additionalFields: ['tags'],
       } as Parameters<typeof mod.listModels>[0])) {
         const model = raw as ModelEntryLoose;
         scanned++;
