@@ -258,6 +258,12 @@ interface Window {
       ) => Promise<import('./shared/types').HotkeySettings>;
       reset: () => Promise<import('./shared/types').HotkeySettings>;
     };
+    accessibility: {
+      get: () => Promise<import('./shared/types').AccessibilitySettings>;
+      set: (
+        partial: Partial<import('./shared/types').AccessibilitySettings>
+      ) => Promise<import('./shared/types').AccessibilitySettings>;
+    };
     tray: {
       getSettings: () => Promise<import('./shared/types').TraySettings>;
       setSettings: (

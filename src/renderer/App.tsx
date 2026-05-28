@@ -159,6 +159,17 @@ export function App() {
       } catch {
         // Themes IPC missing or store malformed — defaults are fine.
       }
+      // Apply persisted accessibility prefs early so things like font
+      // scale + high contrast are in place before the first paint.
+      try {
+        const a11y = await window.electronAPI.accessibility.get();
+        if (!cancelled) {
+          const { applyAccessibilityPrefs } = await import('./components/settings/accessibility-prefs');
+          applyAccessibilityPrefs(a11y);
+        }
+      } catch {
+        // Accessibility IPC missing — defaults are no-ops, fine to skip.
+      }
       if (!cancelled) setHydrated(true);
     })();
     return () => {

@@ -196,6 +196,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke(IPC.HOTKEYS_SET_BINDING, action, chord),
     reset: () => ipcRenderer.invoke(IPC.HOTKEYS_RESET),
   },
+  accessibility: {
+    get: () => ipcRenderer.invoke(IPC.ACCESSIBILITY_GET),
+    set: (partial: unknown) => ipcRenderer.invoke(IPC.ACCESSIBILITY_SET, partial),
+  },
   tray: {
     getSettings: () => ipcRenderer.invoke(IPC.TRAY_GET_SETTINGS),
     setSettings: (partial: unknown) =>

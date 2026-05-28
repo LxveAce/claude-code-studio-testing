@@ -169,6 +169,12 @@ export const IPC = {
    *  unfocused/Electron contexts. */
   APP_CLIPBOARD_WRITE: 'app:clipboard-write',
 
+  // Accessibility (Item 10 of v3.2.1 polish).  Persisted JSON in
+  // <userData>/accessibility.json, applied to document.documentElement
+  // in the renderer on every change.
+  ACCESSIBILITY_GET: 'accessibility:get',
+  ACCESSIBILITY_SET: 'accessibility:set',
+
   // File / project explorer (3.0.0-beta.3).
   PROJECT_LIST_DIR: 'project:list-dir',
   PROJECT_RECENT_LIST: 'project:recent-list',

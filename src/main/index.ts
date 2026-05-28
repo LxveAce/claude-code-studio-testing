@@ -14,6 +14,7 @@ import { UpdaterService } from './updater-service';
 import { SessionService } from './session-service';
 import { HotkeysService } from './hotkeys-service';
 import { TrayService } from './tray-service';
+import { AccessibilityService } from './accessibility-service';
 import { CostService } from './cost-service';
 import { CliService } from './cli-service';
 import { ModelRegistry } from './model-registry';
@@ -75,6 +76,7 @@ let updaterService: UpdaterService | null = null;
 let sessionService: SessionService | null = null;
 let hotkeysService: HotkeysService | null = null;
 let trayService: TrayService | null = null;
+let accessibilityService: AccessibilityService | null = null;
 let costService: CostService | null = null;
 let cliService: CliService | null = null;
 let themeService: ThemeService | null = null;
@@ -185,6 +187,11 @@ function getHotkeys(): HotkeysService {
 function getTray(): TrayService {
   if (!trayService) trayService = new TrayService();
   return trayService;
+}
+
+function getAccessibility(): AccessibilityService {
+  if (!accessibilityService) accessibilityService = new AccessibilityService();
+  return accessibilityService;
 }
 
 function getCli(): CliService {
@@ -1271,6 +1278,16 @@ function setupHotkeys() {
   ipcMain.handle(IPC.HOTKEYS_RESET, () => getHotkeys().resetDefaults());
 }
 
+function setupAccessibility() {
+  ipcMain.handle(IPC.ACCESSIBILITY_GET, () => getAccessibility().get());
+  ipcMain.handle(IPC.ACCESSIBILITY_SET, (_event, partial: unknown) => {
+    if (partial === null || typeof partial !== 'object') {
+      throw new Error('accessibility set: partial must be an object');
+    }
+    return getAccessibility().set(partial as Record<string, unknown>);
+  });
+}
+
 function setupTray() {
   const tray = getTray();
   tray.attach({
@@ -1368,6 +1385,7 @@ app.whenReady().then(() => {
   setupRunningModels();
   setupWindowControls();
   setupHotkeys();
+  setupAccessibility();
   setupTray();
 
   // Kick off the auto-updater after a short grace period so the window
