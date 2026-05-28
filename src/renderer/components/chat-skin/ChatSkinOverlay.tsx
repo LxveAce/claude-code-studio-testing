@@ -302,12 +302,49 @@ export function ChatSkinOverlay({ paneId, visible, onToggleOff, profile }: Props
     }
   };
 
+  /**
+   * Stop the in-flight generation by sending an SIGINT char (\x03) to
+   * the PTY. This is the same byte Ctrl+C sends in a real terminal and
+   * is the conventional way to abort a CLI process. For Claude in
+   * non-interactive `--print --output-format=stream-json` mode the
+   * binary should treat this as "cancel current response, keep the
+   * session alive" — but the exact semantics are version-dependent
+   * (older Claude builds may exit the whole session). Pending a real
+   * binary probe; we'll iterate if Claude has a structured abort
+   * event instead.
+   */
+  const stopGeneration = useCallback(() => {
+    if (!jsonMode) return;
+    try {
+      window.electronAPI.terminal.sendInput(paneId, '\x03');
+    } catch {
+      // PTY may be dead — nothing to abort. No-op.
+    }
+  }, [jsonMode, paneId]);
+
+  // Schedule a single re-render once the streaming window passes, so the
+  // Stop button flips back to Send the moment chunks stop arriving (a
+  // setInterval with `setLastChunkAt(v => v)` would bail in React on
+  // identical state — `streamingTick` is a fresh counter that doesn't).
+  const [streamingTick, setStreamingTick] = useState(0);
+  useEffect(() => {
+    if (lastChunkAt === 0) return;
+    const timer = window.setTimeout(() => {
+      setStreamingTick((t) => t + 1);
+    }, STREAMING_TAIL_MS + 50);
+    return () => window.clearTimeout(timer);
+  }, [lastChunkAt]);
+
   const isStreaming = useMemo(() => {
     if (lastChunkAt === 0) return false;
     const last = messages[messages.length - 1];
     if (!last || last.role !== 'assistant') return false;
     return Date.now() - lastChunkAt < STREAMING_TAIL_MS;
-  }, [messages, lastChunkAt]);
+    // streamingTick included so the memo re-evaluates after the timer
+    // above fires — otherwise the Stop button would stay visible after
+    // the actual stream finished.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, lastChunkAt, streamingTick]);
 
   const personaLabel = useMemo(() => derivePersonaLabel(paneId), [paneId]);
 
@@ -369,6 +406,10 @@ export function ChatSkinOverlay({ paneId, visible, onToggleOff, profile }: Props
         onSend={() => send()}
         onKeyDown={handleKeyDown}
         placeholder={`Message ${personaLabel}…`}
+        // Stop button only available in JSON chat-mode — text-mode
+        // CLIs handle their own interrupts in the interactive TUI.
+        canStop={jsonMode && isStreaming}
+        onStop={stopGeneration}
       />
 
       <style>{`
@@ -1120,6 +1161,8 @@ function Composer({
   onSend,
   onKeyDown,
   placeholder,
+  canStop,
+  onStop,
 }: {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   draft: string;
@@ -1127,8 +1170,12 @@ function Composer({
   onSend: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   placeholder: string;
+  /** Render Stop pill instead of Send while a JSON-mode response streams. */
+  canStop?: boolean;
+  onStop?: () => void;
 }) {
   const hasContent = draft.trim().length > 0;
+  const showStop = !!canStop && !!onStop;
   return (
     <div style={{ padding: '0 20px 18px', background: 'transparent' }}>
       <div
@@ -1176,58 +1223,105 @@ function Composer({
             el.style.height = Math.min(200, el.scrollHeight) + 'px';
           }}
         />
-        <button
-          onClick={onSend}
-          disabled={!hasContent}
-          title="Send (Enter)"
-          aria-label="Send"
-          style={{
-            // Perfectly round send button — matches the pill composer's
-            // visual language. 32×32 = roomy enough for the arrow icon
-            // without crowding adjacent input text.
-            width: 32,
-            height: 32,
-            borderRadius: '50%',
-            border: 'none',
-            background: hasContent
-              ? 'var(--accent-gradient)'
-              : 'rgba(255,255,255,0.08)',
-            color: hasContent ? '#fff' : 'var(--text-secondary)',
-            cursor: hasContent ? 'pointer' : 'not-allowed',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'transform 120ms, background 120ms',
-            flexShrink: 0,
-            boxShadow: hasContent
-              ? 'var(--shadow-glow, 0 0 16px rgba(124,58,237,0.35))'
-              : 'none',
-          }}
-          onMouseDown={(e) => {
-            if (hasContent) e.currentTarget.style.transform = 'scale(0.92)';
-          }}
-          onMouseUp={(e) => {
-            e.currentTarget.style.transform = '';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = '';
-          }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+        {showStop ? (
+          <button
+            onClick={onStop}
+            title="Stop generation"
+            aria-label="Stop generation"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'rgba(248,113,113,0.18)',
+              color: '#fca5a5',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'transform 120ms, background 120ms',
+              flexShrink: 0,
+              boxShadow: '0 0 12px rgba(248,113,113,0.25)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(248,113,113,0.28)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(248,113,113,0.18)';
+              e.currentTarget.style.transform = '';
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'scale(0.92)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = '';
+            }}
           >
-            <line x1="12" y1="19" x2="12" y2="5" />
-            <polyline points="5 12 12 5 19 12" />
-          </svg>
-        </button>
+            {/* Solid square — universal "stop" affordance. */}
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <rect x="6" y="6" width="12" height="12" rx="1" />
+            </svg>
+          </button>
+        ) : (
+          <button
+            onClick={onSend}
+            disabled={!hasContent}
+            title="Send (Enter)"
+            aria-label="Send"
+            style={{
+              // Perfectly round send button — matches the pill composer's
+              // visual language. 32×32 = roomy enough for the arrow icon
+              // without crowding adjacent input text.
+              width: 32,
+              height: 32,
+              borderRadius: '50%',
+              border: 'none',
+              background: hasContent
+                ? 'var(--accent-gradient)'
+                : 'rgba(255,255,255,0.08)',
+              color: hasContent ? '#fff' : 'var(--text-secondary)',
+              cursor: hasContent ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'transform 120ms, background 120ms',
+              flexShrink: 0,
+              boxShadow: hasContent
+                ? 'var(--shadow-glow, 0 0 16px rgba(124,58,237,0.35))'
+                : 'none',
+            }}
+            onMouseDown={(e) => {
+              if (hasContent) e.currentTarget.style.transform = 'scale(0.92)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = '';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = '';
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="12" y1="19" x2="12" y2="5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          </button>
+        )}
       </div>
     </div>
   );

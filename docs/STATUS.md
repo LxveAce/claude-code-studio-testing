@@ -1,8 +1,8 @@
 # Claude Code Studio — Testing Repo STATUS
 
 > **Version:** v3.1.0
-> **Last updated:** 2026-05-27 (post-handoff continuation — 6 stacked PRs from a single session: original 3-item deferred list drained + polish/feature iterations closing 4 of 6 surfaced followups)
-> **Branch this describes:** `master` (testing repo only — `LxveAce/claude-code-studio-testing`); 6 open feature branches stacked: #18 (foundation) → #19 (commands) → #20 (chat-mode) → #21 (polish) → #22 (tool-use renderer) → #23 (PID surfacing)
+> **Last updated:** 2026-05-27 (post-handoff continuation — 7 stacked PRs from a single session: original 3-item deferred list drained + iterations closing 5 of 6 surfaced followups)
+> **Branch this describes:** `master` (testing repo only — `LxveAce/claude-code-studio-testing`); 7 open feature branches stacked: #18 (foundation) → #19 (commands) → #20 (chat-mode) → #21 (polish) → #22 (tool-use renderer) → #23 (PID surfacing) → #24 (Stop button)
 > **Latest session log:** [`SESSION_LOG_2026-05-27_night-terminaltabs.md`](./SESSION_LOG_2026-05-27_night-terminaltabs.md) (4 addendums)
 > **Latest verification report:** [`VERIFICATION_2026-05-27.md`](./VERIFICATION_2026-05-27.md)
 
@@ -291,22 +291,21 @@ original deferred list.
 
 ### Followups surfaced this session (priority order)
 
-Four of the original six shipped this session. Two remain:
+**Five of the original six** shipped this session. One remains:
 
 1. **Verify Claude CLI flag surface for chat-mode** (H-1 in
    `SECURITY_REVIEW_CHAT_MODE.md`). The catalog uses
    `['--print', '--input-format=stream-json', '--output-format=stream-json', '--verbose']`
    — pending real-app confirmation that the local `claude` binary
    accepts those flags + emits the assumed event shapes. First manual
-   run will surface any mismatch as a parse-error bubble.
-2. **"Stop generation" button in chat skin** (M-2 in chat-mode
-   review). Replaces the send button while streaming; sends `\x03`
-   or an abort JSON event. Schema/behavior depends on what Claude
-   actually accepts in stream-json mode — empirical.
+   run will surface any mismatch as a parse-error bubble. **Truly
+   self-verifying** — the renderer surfaces the failure as a clearly-
+   labeled bubble within seconds of launch.
 
-Neither of these block. Item #1 is self-verifying on first manual run;
-item #2 is a single-component UI addition once the abort signal
-behavior is confirmed.
+The Stop button (PR #24) shipped with the `\x03` interrupt approach;
+the JSON-abort fallback is documented in the journal addendum if
+real-app testing shows that `\x03` ends the whole session instead of
+just the current response.
 
 ---
 

@@ -383,3 +383,57 @@ Of the original morning-handoff 3 deferred items + 6 surfaced
 followups (= 9 total), **7 have shipped**. Remaining 2 are bounded:
 one is a manual-test confirmation, the other is empirical UI that
 needs real-app testing to design correctly.
+
+---
+
+## Addendum 6 — Stop button (PR #24, seventh commit)
+
+User said "CONTINUE" (caps again). Picked off the smaller of the two
+remaining followups — M-2 from `SECURITY_REVIEW_CHAT_MODE.md`. Chat-
+mode now has a Stop pill that replaces the Send button while a
+response is streaming.
+
+Branch: `feature/stop-button` stacked on `feature/embedded-pid`.
+
+### What got built
+
+| File | Change |
+|---|---|
+| `ChatSkinOverlay.tsx` | New `stopGeneration` callback sends `\x03` (SIGINT char) via `terminal.sendInput`. Composer gets `canStop?` + `onStop?` props; renders red Stop pill (solid square icon) instead of Send circle when both are true. New `streamingTick` counter + `setTimeout` ensures `isStreaming` recomputes after `STREAMING_TAIL_MS + 50` so the button flips back when chunks stop arriving. Stop is **JSON-mode only** — text-mode CLIs handle their own Ctrl+C. |
+| `ChatSkinOverlay.tsx.lmm.md` | Addendum 3 covering the Stop button, the `\x03` vs JSON-abort tradeoff, streaming-state detection mechanics. |
+| `STATUS.md` | Followups 2 → 1; header updated for 7 stacked PRs. |
+
+### Verification
+
+- ✅ `npx tsc --noEmit` clean.
+- ✅ `npx vite build` clean.
+- ✅ `node scripts/runtime-verify.mjs` — 30/30 still pass.
+
+### Why no separate red-team doc
+
+Single-component additive change (Composer subprops + new callback in
+ChatSkinOverlay). Below the threshold for a dedicated red-team file.
+The journal addendum covers the empirical tradeoff (`\x03` vs JSON
+abort) — if the user's real Claude binary treats `\x03` as
+session-kill rather than abort-current-response, we swap to a
+structured signal. That decision needs real-app data.
+
+### Final state (revised again)
+
+**7 PRs in flight** on the testing repo:
+- #18 — TerminalTabs wiring + session v2
+- #19 — Commands tab mirror + H-1 fix + verifier extension
+- #20 — Claude chat-mode profile + JSONL parser
+- #21 — Polish (submit flag + tab cap)
+- #22 — Tool-use / tool-result / thinking renderer
+- #23 — Model-tab PID surfacing
+- #24 — Stop button in chat-mode (this commit)
+
+**Followups list 2 → 1:** only the flag-surface H-1 left, and it's
+truly self-verifying — the first launch of "Claude (Chat)" will
+either show `_Claude JSON session ready._` (success) or a clear
+parse-error bubble with the binary's actual usage message (failure
++ catalog args to iterate). No new code can probe this without an
+actual `claude` binary on the verifier host.
+
+**8 of 9 original followups shipped.** The 9th is a manual probe.

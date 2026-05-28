@@ -176,3 +176,44 @@ streaming text restarts a new bubble after a tool/thinking interrupt
   `[image]` placeholder via `extractToolResultText`.
 - Copy button on the expanded JSON / output. The browser's native
   text-select + Ctrl-C is fine for now.
+
+---
+
+## Addendum 3 — Stop button (PR #24)
+
+Closes M-2 from `SECURITY_REVIEW_CHAT_MODE.md`. When chat-mode is
+active AND a response is streaming, the Composer's circular send
+button swaps to a red Stop pill. Click sends `\x03` (SIGINT char) to
+the PTY — the same byte Ctrl+C produces in a real terminal.
+
+**Why `\x03` and not a JSON abort event:**
+- The Claude SDK reference doesn't document an `{"type":"abort"}`
+  event on the stdin side for stream-json mode. `\x03` is the
+  universal TTY interrupt that most CLIs handle correctly.
+- Risk: older Claude CLI builds may treat `\x03` as "kill the whole
+  session" rather than "abort current response, keep session alive."
+  Acceptable for v1; if real-app testing shows session-kill, swap to
+  a structured abort signal.
+
+**Streaming-state detection:**
+- `isStreaming` was already computed via
+  `lastChunkAt + STREAMING_TAIL_MS`.
+- A `streamingTick` counter + post-chunk `setTimeout` ensures React
+  re-renders when the streaming window passes (otherwise
+  `isStreaming` would stay true between renders and the Stop pill
+  wouldn't flip back to Send when chunks stop arriving).
+- Text-mode (no `jsonMode`) never shows Stop — the interactive TUI
+  handles its own Ctrl+C; injecting `\x03` into an active prompt
+  there would cancel whatever the user was typing.
+
+**Composer prop additions:**
+- `canStop?: boolean` — render Stop instead of Send.
+- `onStop?: () => void` — click handler. Wired to `stopGeneration`
+  in ChatSkinOverlay.
+
+**Tradeoffs accepted:**
+- ~250 ms flicker possible at the streaming/idle boundary (the
+  setTimeout fires `STREAMING_TAIL_MS + 50` ms after the last chunk).
+  Acceptable; the button transition is visually smooth.
+- No confirmation prompt before sending the interrupt. The action is
+  idempotent if there's nothing in flight.
