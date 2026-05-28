@@ -4,6 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type {
+  HFAuditEntry,
   HFGgufVariant,
   HFModelCard,
   HFSearchHit,
@@ -14,6 +15,8 @@ import type {
 
 const SETTINGS_FILE = 'huggingface-settings.json';
 const CACHE_DIR_NAME = 'hf-cache';
+const AUDIT_LOG_FILE = 'huggingface-research-audit.jsonl';
+const MAX_AUDIT_ENTRIES = 1000;
 
 const DEFAULT_SETTINGS: HFSettings = {
   researchModeEnabled: false,
@@ -289,6 +292,80 @@ export class HuggingFaceService {
     }
     fs.rmSync(target, { recursive: true, force: true });
     return true;
+  }
+
+  // ---- research audit log ----
+
+  /** Append a Research-catalog launch event to the JSONL audit log.
+   *  Bounded to MAX_AUDIT_ENTRIES — older entries truncate FIFO. */
+  appendAuditEntry(entry: HFAuditEntry): void {
+    const auditPath = this.getAuditLogPath();
+    fs.mkdirSync(path.dirname(auditPath), { recursive: true });
+    const line = JSON.stringify(entry) + '\n';
+    try {
+      fs.appendFileSync(auditPath, line, { mode: 0o600 });
+    } catch {
+      // ignore — best-effort logging
+      return;
+    }
+    // Cap the file by trimming oldest entries when it grows large.
+    // Cheap heuristic: only check size occasionally (every 50 appends
+    // would be ideal; we approximate by checking when the file is
+    // larger than ~MAX_AUDIT_ENTRIES * 200 bytes per line).
+    try {
+      const stat = fs.statSync(auditPath);
+      if (stat.size > MAX_AUDIT_ENTRIES * 256) {
+        const all = this.readAuditLog();
+        const trimmed = all.slice(-MAX_AUDIT_ENTRIES);
+        const next = trimmed.map((e) => JSON.stringify(e)).join('\n') + '\n';
+        const tmp = `${auditPath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+        fs.writeFileSync(tmp, next, { mode: 0o600 });
+        fs.renameSync(tmp, auditPath);
+      }
+    } catch {
+      // ignore — trimming is opportunistic
+    }
+  }
+
+  readAuditLog(): HFAuditEntry[] {
+    const auditPath = this.getAuditLogPath();
+    let raw: string;
+    try {
+      raw = fs.readFileSync(auditPath, 'utf8');
+    } catch {
+      return [];
+    }
+    const out: HFAuditEntry[] = [];
+    for (const line of raw.split('\n')) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as Partial<HFAuditEntry>;
+        if (typeof parsed.ts !== 'string') continue;
+        if (typeof parsed.repoId !== 'string') continue;
+        out.push({
+          ts: parsed.ts,
+          repoId: parsed.repoId,
+          quant: typeof parsed.quant === 'string' ? parsed.quant : null,
+          note: typeof parsed.note === 'string' ? parsed.note : undefined,
+        });
+      } catch {
+        // skip malformed line
+      }
+    }
+    return out;
+  }
+
+  clearAuditLog(): void {
+    const auditPath = this.getAuditLogPath();
+    try {
+      fs.unlinkSync(auditPath);
+    } catch {
+      // already absent
+    }
+  }
+
+  private getAuditLogPath(): string {
+    return path.join(app.getPath('userData'), AUDIT_LOG_FILE);
   }
 
   // ---- internals ----

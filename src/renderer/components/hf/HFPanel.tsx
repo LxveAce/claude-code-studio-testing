@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type {
+  HFAuditEntry,
   HFCachedEntry,
   HFGgufVariant,
   HFModelCard,
@@ -188,11 +189,13 @@ function ResultCard({
   expanded,
   onToggleExpand,
   onErr,
+  researchMode,
 }: {
   hit: HFSearchHit;
   expanded: boolean;
   onToggleExpand: () => void;
   onErr: (msg: string | null) => void;
+  researchMode?: boolean;
 }) {
   const [card, setCard] = useState<HFModelCard | null>(null);
   const [busy, setBusy] = useState(false);
@@ -265,7 +268,12 @@ function ResultCard({
               {card.license && (
                 <div style={subtleStyle}>License: <strong style={{ color: 'var(--text-secondary)' }}>{card.license}</strong></div>
               )}
-              <GgufVariantList repoId={card.id} variants={card.gguf} onErr={onErr} />
+              <GgufVariantList
+                repoId={card.id}
+                variants={card.gguf}
+                onErr={onErr}
+                researchMode={researchMode}
+              />
             </>
           )}
         </div>
@@ -278,10 +286,12 @@ function GgufVariantList({
   repoId,
   variants,
   onErr,
+  researchMode,
 }: {
   repoId: string;
   variants: HFGgufVariant[];
   onErr: (msg: string | null) => void;
+  researchMode?: boolean;
 }) {
   // Per-variant launch state.  `null` means idle; "launching" while
   // the IPC is in flight; "launched" for 4s after success so the
@@ -309,7 +319,12 @@ function GgufVariantList({
     setLaunchState((s) => ({ ...s, [key]: 'launching' }));
     try {
       const cwd = await window.electronAPI.git.getCwd().catch(() => undefined);
-      const r = await window.electronAPI.hf.importAndLaunch(repoId, quant, cwd ?? undefined);
+      const r = await window.electronAPI.hf.importAndLaunch(
+        repoId,
+        quant,
+        cwd ?? undefined,
+        !!researchMode
+      );
       if (!r.ok) {
         onErr(`Import failed: ${r.error ?? 'unknown error'}`);
         setLaunchState((s) => ({ ...s, [key]: null }));
@@ -479,6 +494,15 @@ function ResearchTab({
       setErr(formatError(e));
     }
   };
+  const disable = async () => {
+    setErr(null);
+    try {
+      const next = await window.electronAPI.hf.setSettings({ researchModeEnabled: false });
+      onSettings(next);
+    } catch (e) {
+      setErr(formatError(e));
+    }
+  };
   if (!enabled) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -499,10 +523,164 @@ function ResearchTab({
     );
   }
   return (
-    <div style={subtleStyle}>
-      Research catalog UI will land in a follow-up PR.  When wired, this tab will list curated
-      HF Collections (e.g. <code>chwoo/uncensored-models</code>) and run imports under an isolated
-      OLLAMA_MODELS path so they don&apos;t mix with your normal models.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={researchActiveBannerStyle} role="note">
+        <div>
+          <strong style={{ color: '#fbbf24' }}>Research mode is active.</strong>
+          <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>
+            Imports get a "Research" badge in Models and every launch is logged below.
+          </span>
+        </div>
+        <button onClick={() => void disable()} style={btnStyle}>
+          Disable
+        </button>
+      </div>
+      {err && <div role="alert" style={errBannerStyle}>{err}</div>}
+      <ResearchBrowse onErr={setErr} />
+      <ResearchAuditLog onErr={setErr} />
+    </div>
+  );
+}
+
+function ResearchBrowse({ onErr }: { onErr: (msg: string | null) => void }) {
+  // Same surface as BrowseTab but seeded with a research-leaning query
+  // ("uncensored" + "abliterated") and the import button calls
+  // hf.importAndLaunch with research:true.
+  const [query, setQuery] = useState('uncensored');
+  const [results, setResults] = useState<HFSearchHit[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [openCardId, setOpenCardId] = useState<string | null>(null);
+  const inFlight = useRef<number>(0);
+
+  const runSearch = useCallback(async () => {
+    onErr(null);
+    setBusy(true);
+    const myReq = ++inFlight.current;
+    try {
+      const hits = await window.electronAPI.hf.search({
+        query: query.trim() || 'uncensored',
+        ggufOnly: true,
+        limit: 30,
+      });
+      if (myReq !== inFlight.current) return;
+      setResults(hits);
+    } catch (e) {
+      onErr(formatError(e));
+    } finally {
+      if (myReq === inFlight.current) setBusy(false);
+    }
+  }, [query, onErr]);
+
+  useEffect(() => {
+    void runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        <input
+          type="search"
+          placeholder="Try 'uncensored', 'abliterated', 'dolphin', 'wizard-vicuna-uncensored'…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void runSearch();
+          }}
+          style={searchInputStyle}
+          aria-label="Search Research catalog"
+        />
+        <button onClick={() => void runSearch()} disabled={busy} style={primaryBtnStyle}>
+          {busy ? 'Searching…' : 'Search'}
+        </button>
+      </div>
+
+      {results.length === 0 && !busy && (
+        <div style={emptyStyle}>
+          No matches.  Try a different keyword like "abliterated" or a specific repo name.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {results.map((hit) => (
+          <ResultCard
+            key={hit.id}
+            hit={hit}
+            expanded={openCardId === hit.id}
+            onToggleExpand={() => setOpenCardId((cur) => (cur === hit.id ? null : hit.id))}
+            onErr={onErr}
+            researchMode
+          />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ResearchAuditLog({ onErr }: { onErr: (msg: string | null) => void }) {
+  const [entries, setEntries] = useState<HFAuditEntry[] | null>(null);
+  const [collapsed, setCollapsed] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const log = await window.electronAPI.hf.getResearchLog();
+      setEntries(log);
+    } catch (e) {
+      onErr(formatError(e));
+    }
+  }, [onErr]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const clear = async () => {
+    if (!confirm('Clear the research audit log?  This cannot be undone.')) return;
+    try {
+      await window.electronAPI.hf.clearResearchLog();
+      await refresh();
+    } catch (e) {
+      onErr(formatError(e));
+    }
+  };
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 6, padding: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button onClick={() => setCollapsed((v) => !v)} style={{ ...btnStyle, padding: '4px 6px' }}>
+          {collapsed ? '▶' : '▼'}
+        </button>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>
+          Research audit log
+        </span>
+        <span style={subtleStyle}>{entries?.length ?? 0} entries</span>
+        {entries && entries.length > 0 && (
+          <button onClick={() => void clear()} style={btnStyle}>
+            Clear
+          </button>
+        )}
+      </div>
+      {!collapsed && (
+        <div style={{ marginTop: 8 }}>
+          {!entries || entries.length === 0 ? (
+            <div style={subtleStyle}>No research launches recorded yet.</div>
+          ) : (
+            <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 11, fontFamily: 'monospace' }}>
+              {entries
+                .slice()
+                .reverse()
+                .map((e, i) => (
+                  <div key={`${e.ts}-${i}`} style={{ padding: '3px 0', color: 'var(--text-secondary)' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>{e.ts.slice(0, 19).replace('T', ' ')}</span>
+                    {' '}
+                    {e.repoId}
+                    {e.quant && <span style={{ color: 'var(--accent-light)' }}> :{e.quant}</span>}
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -743,6 +921,18 @@ const disclaimerStyle: React.CSSProperties = {
   border: '1px solid rgba(234, 179, 8, 0.3)',
   borderRadius: 6,
   color: 'var(--text-secondary)',
+  fontSize: 11,
+  lineHeight: 1.5,
+};
+
+const researchActiveBannerStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  padding: '8px 10px',
+  background: 'rgba(234, 179, 8, 0.06)',
+  border: '1px solid rgba(234, 179, 8, 0.4)',
+  borderRadius: 6,
   fontSize: 11,
   lineHeight: 1.5,
 };

@@ -189,6 +189,11 @@ export const IPC = {
    *  it in the catalog (idempotent on the synthesized id), and launch it
    *  through the same MODELS_LAUNCH pipeline so a PTY paneId comes back. */
   HF_IMPORT_AND_LAUNCH: 'hf:import-and-launch',
+  /** Append a Research-catalog launch event to the audit log so the user
+   *  can review which research models they ran and when. */
+  HF_RESEARCH_LOG_LAUNCH: 'hf:research-log-launch',
+  HF_GET_RESEARCH_LOG: 'hf:get-research-log',
+  HF_CLEAR_RESEARCH_LOG: 'hf:clear-research-log',
 
   // File / project explorer (3.0.0-beta.3).
   PROJECT_LIST_DIR: 'project:list-dir',

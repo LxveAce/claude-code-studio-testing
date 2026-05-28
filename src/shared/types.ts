@@ -874,6 +874,18 @@ export interface HFCachedEntry {
   sizeBytes: number;
 }
 
+export interface HFAuditEntry {
+  /** ISO timestamp of the launch. */
+  ts: string;
+  /** Repo id launched from the research catalog. */
+  repoId: string;
+  /** Quantization tag selected, if any. */
+  quant: string | null;
+  /** Optional free-form note (currently unused; reserved for future
+   *  per-prompt logging if/when we add that pass). */
+  note?: string;
+}
+
 // Accessibility — Item 10 of the v3.2.1 polish pass.  Persisted per
 // user under <userData>/accessibility.json.  Renderer applies these to
 // document.documentElement on hydration + on every change so the

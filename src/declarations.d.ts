@@ -281,8 +281,11 @@ interface Window {
       importAndLaunch: (
         repoId: string,
         quant: string | null,
-        cwd?: string
+        cwd?: string,
+        research?: boolean
       ) => Promise<import('./shared/types').ModelLaunchResult>;
+      getResearchLog: () => Promise<import('./shared/types').HFAuditEntry[]>;
+      clearResearchLog: () => Promise<boolean>;
     };
     tray: {
       getSettings: () => Promise<import('./shared/types').TraySettings>;

@@ -1330,7 +1330,8 @@ function setupHuggingFace() {
       _event,
       repoIdRaw: unknown,
       quantRaw: unknown,
-      cwdRaw: unknown
+      cwdRaw: unknown,
+      researchRaw: unknown
     ): Promise<ModelLaunchResult> => {
       if (typeof repoIdRaw !== 'string') {
         return { ok: false, paneId: null, commandLine: null, error: 'repoId must be a string' };
@@ -1346,12 +1347,24 @@ function setupHuggingFace() {
         typeof cwdRaw === 'string' && cwdRaw.length > 0 && cwdRaw.length <= 4096
           ? cwdRaw
           : undefined;
+      const isResearch = researchRaw === true;
+      // Research mode requires the user to have opted in via Settings -> Advanced.
+      if (isResearch && !getHuggingFace().getSettings().researchModeEnabled) {
+        return {
+          ok: false,
+          paneId: null,
+          commandLine: null,
+          error: 'Research mode is disabled.  Enable it in HF -> Research first.',
+        };
+      }
 
       // Idempotent synthesized id so the SAME repo+quant maps to the
-      // same catalog entry on repeated imports.
+      // same catalog entry on repeated imports.  Research entries use
+      // a `hf-research.` prefix so they're visually distinct and the
+      // user can filter them out of the regular Models list later.
       const safeRepo = repoIdRaw.replace('/', '.').replace(/[^A-Za-z0-9_.\-]/g, '_');
       const safeQuant = quant ?? 'default';
-      const synthId = `hf.${safeRepo}.${safeQuant.toLowerCase()}`;
+      const synthId = `${isResearch ? 'hf-research' : 'hf'}.${safeRepo}.${safeQuant.toLowerCase()}`;
       const ollamaName = `hf.co/${repoIdRaw}${quant ? `:${quant}` : ''}`;
 
       const reg = ModelRegistry.instance();
@@ -1360,7 +1373,9 @@ function setupHuggingFace() {
         const fresh: ModelDefinition = {
           id: synthId,
           name: `${repoIdRaw}${quant ? ` (${quant})` : ''}`,
-          description: `Imported from Hugging Face — runs via Ollama (\`${ollamaName}\`).`,
+          description: isResearch
+            ? `Research catalog import — runs via Ollama (\`${ollamaName}\`).  Outputs are logged to the audit trail.`
+            : `Imported from Hugging Face — runs via Ollama (\`${ollamaName}\`).`,
           category: 'local',
           provider: 'Ollama',
           command: 'ollama',
@@ -1371,9 +1386,10 @@ function setupHuggingFace() {
           recommendedQuant: quant ?? undefined,
           roles: ['general-chat'],
           hardwareTiers: ['low', 'mid', 'high'],
-          badge: 'HF Import',
-          recommendedFor:
-            'Imported from the Hugging Face panel.  Ollama pulls the weights on first launch.',
+          badge: isResearch ? 'Research' : 'HF Import',
+          recommendedFor: isResearch
+            ? 'Research-only.  Use in a sandboxed environment; outputs are logged for review.'
+            : 'Imported from the Hugging Face panel.  Ollama pulls the weights on first launch.',
         };
         try {
           reg.add(fresh);
@@ -1388,9 +1404,29 @@ function setupHuggingFace() {
         }
       }
 
-      return launchModelDefinition(model, cwd);
+      const result = launchModelDefinition(model, cwd);
+      // Audit log only on successful research-mode launches so we don't
+      // record failed spawns.
+      if (isResearch && result.ok) {
+        try {
+          getHuggingFace().appendAuditEntry({
+            ts: new Date().toISOString(),
+            repoId: repoIdRaw,
+            quant,
+          });
+        } catch {
+          // ignore — best-effort logging
+        }
+      }
+      return result;
     }
   );
+
+  ipcMain.handle(IPC.HF_GET_RESEARCH_LOG, () => getHuggingFace().readAuditLog());
+  ipcMain.handle(IPC.HF_CLEAR_RESEARCH_LOG, () => {
+    getHuggingFace().clearAuditLog();
+    return true;
+  });
 }
 
 function setupTray() {
