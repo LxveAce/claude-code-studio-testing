@@ -48,18 +48,20 @@ export function CommandsPanel({ onSendCommand, family = 'claude' }: CommandsPane
           background: 'var(--accent-gradient)',
         }} />
         Commands
-        <span style={{
-          marginLeft: 'auto',
-          fontSize: 10,
-          fontWeight: 500,
-          padding: '2px 8px',
-          borderRadius: 'var(--radius-xl)',
-          background: 'var(--accent-dim)',
-          color: 'var(--accent-light)',
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        }}
-        title={`Mirroring the active tab's profile: ${config.label}`}
+        <span
+          data-family-chip={family}
+          style={{
+            marginLeft: 'auto',
+            fontSize: 10,
+            fontWeight: 500,
+            padding: '2px 8px',
+            borderRadius: 'var(--radius-xl)',
+            background: 'var(--accent-dim)',
+            color: 'var(--accent-light)',
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+          }}
+          title={`Mirroring the active tab's profile: ${config.label}`}
         >
           {config.label}
         </span>

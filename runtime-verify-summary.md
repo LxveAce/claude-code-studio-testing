@@ -1,4 +1,4 @@
-# Runtime verification — 2026-05-27T20:54:24.037Z
+# Runtime verification — 2026-05-28T01:45:40.638Z
 
 **Buttons found:** 12
 **Buttons clicked:** 12
@@ -7,7 +7,7 @@
 
 ### (boot) — ✅ pass
 
-**Other events (3):** page.load, info, info
+**Other events (2):** info, info
 
 ### Terminal — ✅ pass
 
@@ -54,6 +54,74 @@
 **Other events (1):** info
 
 ### Settings — ✅ pass
+
+**Other events (1):** info
+
+### (ext:switch-to-terminal) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:tab-add) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:new-claude-tab) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:tab-add-increments-count) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:tab-add-newest-is-active) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:close-newest-tab) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:tab-close-restores-count) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:open-picker) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:picker-opens) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:picker-closes-on-esc) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:switch-to-commands) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:commands-chip-is-claude) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:commands-chip-label-text) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:switch-back-terminal) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:palette-opens-on-hotkey) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:palette-closes-on-esc) — ✅ pass
+
+**Other events (1):** info
+
+### (ext:summary) — ✅ pass
 
 **Other events (1):** info
 

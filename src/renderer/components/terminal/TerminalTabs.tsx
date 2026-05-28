@@ -305,6 +305,9 @@ function Tab({
     <div
       onClick={onSelect}
       title={tab.label}
+      data-terminal-tab={tab.id}
+      data-tab-profile={tab.profile}
+      data-tab-active={active ? 'true' : 'false'}
       style={{
         display: 'flex',
         alignItems: 'center',
