@@ -257,8 +257,11 @@ export function App() {
   );
 
   const handleSendCommand = useCallback(
-    (command: string) => {
-      sendToActive(command, true);
+    (command: string, submit: boolean = true) => {
+      // submit=false routes the command into the pane without a CR — used
+      // by per-command "starter" entries (Aider /add, Ollama /set system,
+      // etc.) where the user needs to type an argument before submitting.
+      sendToActive(command, submit);
       setActivePanel('terminal');
     },
     [sendToActive]
@@ -594,7 +597,7 @@ function RightPanel({
   commandFamily,
 }: {
   panel: SidebarPanel;
-  onSendCommand: (command: string) => void;
+  onSendCommand: (command: string, submit?: boolean) => void;
   commandFamily: CommandFamily;
 }) {
   switch (panel) {

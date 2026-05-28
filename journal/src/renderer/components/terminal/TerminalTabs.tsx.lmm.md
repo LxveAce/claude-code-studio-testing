@@ -171,3 +171,22 @@ Related entries:
   "swap a tab, keep the PTY" invariant work.
 - [[App.tsx.lmm.md]] — owner of the tab list and the session-persistence
   glue.
+
+---
+
+## Addendum — `MAX_TABS_RENDERER` cap (PR #21 polish pass)
+
+Closes M-1 from `docs/security-reviews/SECURITY_REVIEW_TERMINAL_TABS.md`.
+
+Added a renderer-side hard cap of 32 tabs matching
+`SessionService.MAX_TABS`. `addClaudeTab` and `addModelTab` check
+`tabs.length >= MAX_TABS_RENDERER` and short-circuit with a yellow
+`capNotice` banner ("Tab limit reached (32). Close a tab first.") that
+auto-dismisses after 4 s. Prior behavior would silently append a tab
+that PtyRegistry then refused to spawn — manifested as a dead-looking
+terminal for Claude or an `alert()` for models. New behavior is
+consistent and informative for both code paths.
+
+The banner sits between the tab strip and the content area — high enough
+in the visual hierarchy to be noticed, separate enough that it doesn't
+collide with tab gestures. `role="status"` for screen readers.
