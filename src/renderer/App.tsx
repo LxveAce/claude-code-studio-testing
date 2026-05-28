@@ -633,7 +633,7 @@ function RightPanel({
     case 'resources':
       return <ResourcePanel />;
     case 'compact':
-      return <CompactPanel />;
+      return <CompactPanel activeFamily={commandFamily} />;
     case 'cost':
       return <CostPanel />;
     case 'commands':
@@ -643,7 +643,7 @@ function RightPanel({
     case 'github':
       return <GitHubPanel />;
     case 'lmm':
-      return <LMMPanel />;
+      return <LMMPanel activeFamily={commandFamily} />;
     case 'auth':
       return <AuthPanel />;
     case 'sync':
