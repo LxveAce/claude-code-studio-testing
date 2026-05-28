@@ -768,7 +768,8 @@ export type SessionPanelId =
   | 'auth'
   | 'settings'
   | 'models'
-  | 'files';
+  | 'files'
+  | 'hf';
 
 export interface SessionState {
   version: number;
