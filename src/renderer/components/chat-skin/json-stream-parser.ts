@@ -270,7 +270,9 @@ function contentBlocksToActions(
 /**
  * Tool-result content per the Anthropic Messages API can be a string
  * OR an array of content blocks (each a {type:'text',text} or image).
- * We flatten to a single string for display; images get a placeholder.
+ * We flatten to a single string for display; images get a placeholder
+ * that surfaces media_type + source kind so the user knows roughly
+ * what was returned (e.g., `[image: image/png, base64, ~24 KB]`).
  */
 function extractToolResultText(content: unknown): string {
   if (typeof content === 'string') return content;
@@ -279,10 +281,38 @@ function extractToolResultText(content: unknown): string {
   for (const block of content) {
     if (!block || typeof block !== 'object') continue;
     const b = block as Record<string, unknown>;
-    if (b.type === 'text' && typeof b.text === 'string') parts.push(b.text);
-    else if (b.type === 'image') parts.push('[image]');
+    if (b.type === 'text' && typeof b.text === 'string') {
+      parts.push(b.text);
+    } else if (b.type === 'image') {
+      parts.push(formatImagePlaceholder(b));
+    }
   }
   return parts.join('\n');
+}
+
+/**
+ * Build a one-line placeholder for an Anthropic image content block.
+ * Prefers media_type + source kind (`base64` / `url`); for URL sources,
+ * shows a truncated URL so the user can recognize it. Used until the
+ * chat skin grows real image rendering (CSP review required).
+ */
+function formatImagePlaceholder(block: Record<string, unknown>): string {
+  const source = block.source;
+  if (!source || typeof source !== 'object') return '[image]';
+  const s = source as Record<string, unknown>;
+  const media = typeof s.media_type === 'string' ? s.media_type : 'image';
+  const kind = typeof s.type === 'string' ? s.type : 'unknown';
+  if (kind === 'url' && typeof s.url === 'string') {
+    const truncated = s.url.length > 60 ? s.url.slice(0, 57) + '…' : s.url;
+    return `[image: ${media}, url=${truncated}]`;
+  }
+  if (kind === 'base64' && typeof s.data === 'string') {
+    // base64 inflation: bytes ≈ length * 3 / 4. KB approx for legibility.
+    const approxBytes = Math.floor((s.data.length * 3) / 4);
+    const approxKb = (approxBytes / 1024).toFixed(approxBytes >= 102400 ? 0 : 1);
+    return `[image: ${media}, base64, ~${approxKb} KB]`;
+  }
+  return `[image: ${media}, ${kind}]`;
 }
 
 // --- User-input encoder -----------------------------------------------------

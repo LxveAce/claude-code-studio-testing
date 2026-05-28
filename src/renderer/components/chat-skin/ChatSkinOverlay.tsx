@@ -580,6 +580,7 @@ function MessageBubble({ message, showCursor }: { message: ChatMessage; showCurs
 function ToolUseCard({ toolUse }: { toolUse: NonNullable<ChatMessage['toolUse']> }) {
   const [open, setOpen] = useState(false);
   const summary = summarizeToolInput(toolUse.input);
+  const shortId = shortToolId(toolUse.id);
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
       <div
@@ -615,6 +616,22 @@ function ToolUseCard({ toolUse }: { toolUse: NonNullable<ChatMessage['toolUse']>
         >
           <span style={{ fontSize: 14 }} aria-hidden="true">🔧</span>
           <span style={{ fontWeight: 600 }}>{toolUse.name}</span>
+          {shortId && (
+            <span
+              title={`tool_use_id: ${toolUse.id}`}
+              style={{
+                fontSize: 10,
+                fontFamily: MONO_STACK,
+                padding: '1px 6px',
+                borderRadius: 999,
+                background: 'rgba(124,58,237,0.18)',
+                color: 'var(--accent-light)',
+                flexShrink: 0,
+              }}
+            >
+              #{shortId}
+            </span>
+          )}
           {!open && summary && (
             <span
               style={{
@@ -680,6 +697,7 @@ function ToolResultCard({ result }: { result: NonNullable<ChatMessage['toolResul
   const [open, setOpen] = useState(false);
   const lineCount = result.output ? result.output.split('\n').length : 0;
   const preview = result.output ? result.output.replace(/\n/g, ' ').slice(0, 80) : '(empty)';
+  const shortId = shortToolId(result.toolUseId);
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
       <div
@@ -715,6 +733,22 @@ function ToolResultCard({ result }: { result: NonNullable<ChatMessage['toolResul
         >
           <span style={{ fontSize: 14 }} aria-hidden="true">↩</span>
           <span style={{ fontWeight: 600 }}>Tool result</span>
+          {shortId && (
+            <span
+              title={`tool_use_id: ${result.toolUseId}`}
+              style={{
+                fontSize: 10,
+                fontFamily: MONO_STACK,
+                padding: '1px 6px',
+                borderRadius: 999,
+                background: 'rgba(74,222,128,0.18)',
+                color: '#86efac',
+                flexShrink: 0,
+              }}
+            >
+              #{shortId}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
             ({lineCount} {lineCount === 1 ? 'line' : 'lines'})
           </span>
@@ -841,18 +875,48 @@ function ThinkingBlock({ text }: { text: string }) {
   );
 }
 
+/**
+ * Priority-ordered list of input field names to surface as the
+ * tool's one-line summary. Expanded in PR #26: catches Read/Write/Edit
+ * (`file_path`), Bash (`command`), Grep (`pattern`/`query`), Glob
+ * (`pattern`), web tools (`url`), task launchers (`prompt`/
+ * `description`), and Anthropic SDK conventions
+ * (`target_file`, `cmd`, `q`, `instruction`, `text`, `content`). New
+ * tool definitions can drop in at the end without reshuffling.
+ */
+const TOOL_SUMMARY_FIELDS = [
+  'file_path', 'path', 'filename', 'target_file',
+  'command', 'cmd', 'shell', 'script',
+  'query', 'pattern', 'q', 'search',
+  'prompt', 'instruction', 'description',
+  'url', 'href',
+  'text', 'content',
+];
+
 function summarizeToolInput(input: unknown): string {
-  // Try to surface the most useful field (path, command, query, prompt)
-  // so the user gets a glance-level read on what the tool is doing
-  // without expanding the card.
   if (!input || typeof input !== 'object') return '';
   const obj = input as Record<string, unknown>;
-  for (const key of ['file_path', 'path', 'filename', 'command', 'query', 'pattern', 'prompt', 'url']) {
+  for (const key of TOOL_SUMMARY_FIELDS) {
     const v = obj[key];
-    if (typeof v === 'string' && v.length > 0) return v.length > 80 ? v.slice(0, 79) + '…' : v;
+    if (typeof v === 'string' && v.length > 0) {
+      return v.length > 80 ? v.slice(0, 79) + '…' : v;
+    }
   }
   const keys = Object.keys(obj).slice(0, 3).join(', ');
   return keys ? `{ ${keys} }` : '';
+}
+
+/**
+ * Compact identifier shown on both ToolUseCard and ToolResultCard so
+ * the user can correlate a result with its originating call. Strips
+ * the Anthropic SDK `toolu_` / `tu_` prefix and shows the first 6
+ * chars of the remainder — enough to be unique within a session,
+ * short enough to fit beside the icon.
+ */
+function shortToolId(id: string): string {
+  if (!id) return '';
+  const cleaned = id.replace(/^toolu?_/, '');
+  return cleaned.slice(0, 6);
 }
 
 function safeStringify(value: unknown): string {
