@@ -11,6 +11,44 @@ v2 → v3 = multi-model surface).
 
 ---
 
+## [4.0.2] — 2026-05-28
+
+Second hotfix.  v4.0.1's HF fix went too aggressive in dropping
+`additionalFields`, breaking the GGUF filter; plus the Research tab
+needed a curated starting list; plus the Claude (Chat) "exit code 1"
+that v4.0.1's cli-resolver fix uncovered deserved a real diagnostic.
+
+### Fixed
+- **HF Browse / Research GGUF Only returned 0 results.**  The v4.0.1
+  hotfix removed `additionalFields: ['tags', 'pipeline_tag']` to dodge
+  the API's `expand[N] contains a duplicate value` error.  But `tags`
+  is what the GGUF filter inspects — without it every model was
+  filtered out.  Restored `additionalFields: ['tags']` alone
+  (`pipeline_tag` was the actual duplicate; the SDK already includes
+  it in defaults).  GGUF Only now correctly surfaces GGUF models.
+- **GGUF Only default flipped to OFF.**  The filter is useful when
+  you know you'll Import to Ollama, but defaulting to ON hid the
+  broader Hub.  Tooltip now explains "GGUF = the quantized weight
+  format llama.cpp / Ollama consume."
+- **Claude (Chat) "exit code 1" diagnostic.**  v4.0.1 fixed the
+  "File not found" by adding `claude` to the cli-resolver, but if
+  the local CLI doesn't recognise `--input-format=stream-json`, it
+  exits fast with code 1 and the user just saw the bare exit code.
+  EmbeddedTerminal now detects fast-exits on that specific profile
+  and surfaces a yellow hint pointing at `claude --version` and the
+  npm upgrade command.
+
+### Added
+- **Curated research-model list** at the top of the Research tab.
+  Eight well-known uncensored / abliterated GGUF models pre-packaged
+  with size tier badges and Import buttons so the tab has something
+  runnable on day one even before the live search settles.
+  Includes the failspy abliterated Llama 3 8B / 70B, Dolphin 2.9
+  Llama 3 8B, Dolphin 2.5 Mixtral 8x7B, Wizard-Vicuna uncensored
+  7B / 13B, Hermes 3 Llama 3.1 8B, and Dolphin 2.9.4 Llama 3.1 8B.
+
+---
+
 ## [4.0.1] — 2026-05-28
 
 Hotfix release.  Four bugs found in v4.0.0 once it was installed and
