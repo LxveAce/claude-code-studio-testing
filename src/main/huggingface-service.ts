@@ -108,6 +108,20 @@ export class HuggingFaceService {
 
   // ---- public surface ----
 
+  /** In-flight downloads, keyed by `${repoId}::${fileName}`, so
+   *  cancelDownload() can find the right request to abort. */
+  private inFlightDownloads = new Map<string, { abort: () => void }>();
+
+  /** Cancel an in-flight download.  Returns true if a matching transfer
+   *  was found and aborted. */
+  cancelDownload(repoId: string, fileName: string): boolean {
+    const key = `${repoId}::${fileName}`;
+    const entry = this.inFlightDownloads.get(key);
+    if (!entry) return false;
+    entry.abort();
+    return true;
+  }
+
   /** Direct GGUF file download to <userData>/hf-cache/<repo>/<file>.
    *  Streams via Electron's net module + emits progress events to all
    *  open windows.  Caller passes a stable transferId so the renderer
@@ -117,6 +131,11 @@ export class HuggingFaceService {
    *  mimic Hugging Face's hub layout — that way our Cached tab listing
    *  recognises the result and the user can swap to the upstream HF
    *  cache without re-downloading.
+   *
+   *  v4.0.2 round 8: skip-if-cached (returns early if the file already
+   *  exists), cancellation support (via cancelDownload), and
+   *  bytesPerSec / etaSeconds in the progress event using a 5-sample
+   *  rolling throughput window.
    */
   async downloadFile(opts: {
     repoId: string;
@@ -146,15 +165,51 @@ export class HuggingFaceService {
     }
     fs.mkdirSync(repoDir, { recursive: true });
     const destPath = path.join(repoDir, opts.fileName);
+    // Skip-if-cached: if a complete file already exists, broadcast a
+    // synthetic done event and return immediately without any network.
+    try {
+      const st = fs.statSync(destPath);
+      if (st.isFile() && st.size > 0) {
+        broadcast({
+          repoId: opts.repoId,
+          fileName: opts.fileName,
+          bytesCompleted: st.size,
+          bytesTotal: st.size,
+          percent: 100,
+          bytesPerSec: null,
+          etaSeconds: 0,
+          done: true,
+          error: null,
+        });
+        return { ok: true, destPath, bytesWritten: st.size, error: null };
+      }
+    } catch {
+      // missing — fall through to download path
+    }
     const tmpPath = `${destPath}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.part`;
     const url = `https://huggingface.co/${opts.repoId}/resolve/main/${encodeURIComponent(opts.fileName)}`;
     let bytesCompleted = 0;
     let bytesTotal: number | null = null;
     let writeStream: fs.WriteStream | null = null;
+    // 5-sample rolling window for throughput estimation.
+    const throughputSamples: Array<{ at: number; bytes: number }> = [];
+    const transferKey = `${opts.repoId}::${opts.fileName}`;
+    let cancelled = false;
     try {
       const request = net.request({ method: 'GET', url, redirect: 'follow' });
       request.setHeader('User-Agent', 'Catalyst-UI/4.x (+https://github.com/LxveAce/catalyst-ui)');
       writeStream = fs.createWriteStream(tmpPath);
+      // Register the abort handle so cancelDownload() can find us.
+      this.inFlightDownloads.set(transferKey, {
+        abort: () => {
+          cancelled = true;
+          try {
+            request.abort();
+          } catch {
+            // ignore
+          }
+        },
+      });
       await new Promise<void>((resolve, reject) => {
         let lastBroadcastAt = 0;
         request.on('response', (response) => {
@@ -177,6 +232,26 @@ export class HuggingFaceService {
             const now = Date.now();
             if (now - lastBroadcastAt >= 100) {
               lastBroadcastAt = now;
+              // Rolling throughput window: keep last 5 samples ~500ms apart.
+              throughputSamples.push({ at: now, bytes: bytesCompleted });
+              if (throughputSamples.length > 5) throughputSamples.shift();
+              let bytesPerSec: number | null = null;
+              let etaSeconds: number | null = null;
+              if (throughputSamples.length >= 2) {
+                const oldest = throughputSamples[0];
+                const newest = throughputSamples[throughputSamples.length - 1];
+                const dtSec = (newest.at - oldest.at) / 1000;
+                const dB = newest.bytes - oldest.bytes;
+                if (dtSec > 0 && dB > 0) {
+                  bytesPerSec = dB / dtSec;
+                  if (bytesTotal && bytesPerSec > 0) {
+                    etaSeconds = Math.max(
+                      0,
+                      Math.round((bytesTotal - bytesCompleted) / bytesPerSec)
+                    );
+                  }
+                }
+              }
               broadcast({
                 repoId: opts.repoId,
                 fileName: opts.fileName,
@@ -186,6 +261,8 @@ export class HuggingFaceService {
                   bytesTotal && bytesTotal > 0
                     ? Math.max(0, Math.min(100, Math.round((bytesCompleted / bytesTotal) * 100)))
                     : null,
+                bytesPerSec,
+                etaSeconds,
                 done: false,
                 error: null,
               });
@@ -200,22 +277,30 @@ export class HuggingFaceService {
           });
           response.on('error', (err: Error) => reject(err));
         });
-        request.on('error', (err: Error) => reject(err));
+        request.on('error', (err: Error) => {
+          if (cancelled) reject(new Error('cancelled'));
+          else reject(err);
+        });
+        request.on('abort', () => reject(new Error('cancelled')));
         request.end();
       });
       // Atomic rename.
       fs.renameSync(tmpPath, destPath);
+      this.inFlightDownloads.delete(transferKey);
       broadcast({
         repoId: opts.repoId,
         fileName: opts.fileName,
         bytesCompleted,
         bytesTotal,
         percent: 100,
+        bytesPerSec: null,
+        etaSeconds: 0,
         done: true,
         error: null,
       });
       return { ok: true, destPath, bytesWritten: bytesCompleted, error: null };
     } catch (e) {
+      this.inFlightDownloads.delete(transferKey);
       try {
         if (writeStream) writeStream.close();
       } catch {
@@ -233,6 +318,8 @@ export class HuggingFaceService {
         bytesCompleted,
         bytesTotal,
         percent: null,
+        bytesPerSec: null,
+        etaSeconds: null,
         done: false,
         error: msg,
       });
@@ -686,6 +773,9 @@ function extractGgufMeta(g: Record<string, unknown>): HFGgufMetadata {
       typeof g.totalFileSize === 'number' && Number.isFinite(g.totalFileSize)
         ? (g.totalFileSize as number)
         : null,
+    chatTemplate: typeof g.chat_template === 'string' ? g.chat_template : null,
+    bosToken: typeof g.bos_token === 'string' ? g.bos_token : null,
+    eosToken: typeof g.eos_token === 'string' ? g.eos_token : null,
   };
 }
 

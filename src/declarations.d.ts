@@ -290,6 +290,10 @@ interface Window {
         repoId: string,
         fileName: string
       ) => Promise<import('./shared/types').HFDownloadResult>;
+      cancelDownload: (
+        repoId: string,
+        fileName: string
+      ) => Promise<boolean>;
       onDownloadProgress: (
         cb: (event: import('./shared/types').HFDownloadProgress) => void
       ) => () => void;

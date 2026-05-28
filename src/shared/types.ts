@@ -845,6 +845,11 @@ export interface HFGgufMetadata {
   contextLength: number | null;
   totalParams: number | null;
   totalFileSize: number | null;
+  /** Jinja chat template baked into the GGUF.  Useful for the
+   *  "Prompt format" viewer in the expanded card. */
+  chatTemplate: string | null;
+  bosToken: string | null;
+  eosToken: string | null;
 }
 
 export interface HFSearchHit {
@@ -897,10 +902,15 @@ export interface HFDownloadProgress {
   bytesCompleted: number;
   bytesTotal: number | null;
   percent: number | null;
+  /** Rolling-window throughput in bytes/sec (null until enough samples). */
+  bytesPerSec: number | null;
+  /** Estimated seconds remaining based on bytesPerSec.  Null until enough samples. */
+  etaSeconds: number | null;
   /** True when the download finished successfully. */
   done: boolean;
   /** Non-null when the download failed; bytesCompleted/percent reflect
-   *  the state at failure. */
+   *  the state at failure.  Includes `'cancelled'` when the user
+   *  aborted via hf.cancelDownload. */
   error: string | null;
 }
 

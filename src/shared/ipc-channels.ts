@@ -198,6 +198,8 @@ export const IPC = {
    *  cache directory.  Renderer subscribes to `hf:download-progress`
    *  events via terminal.onData-style helper to follow progress. */
   HF_DOWNLOAD: 'hf:download',
+  /** Cancel an in-flight download.  Returns true if aborted. */
+  HF_CANCEL_DOWNLOAD: 'hf:cancel-download',
 
   // File / project explorer (3.0.0-beta.3).
   PROJECT_LIST_DIR: 'project:list-dir',

@@ -353,6 +353,55 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
         </button>
       </div>
 
+      {/* v4.0.2 round 7: license quick-filter chips.  Click one to seed the
+          query with a license filter; click again to clear.  These map to
+          actual HF tag conventions (license:apache-2.0, license:mit, etc.). */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', alignSelf: 'center' }}>
+          License:
+        </span>
+        {[
+          { key: 'apache-2.0', label: 'Apache 2.0' },
+          { key: 'mit', label: 'MIT' },
+          { key: 'llama3', label: 'Llama 3' },
+          { key: 'llama3.1', label: 'Llama 3.1' },
+          { key: 'llama3.2', label: 'Llama 3.2' },
+          { key: 'gemma', label: 'Gemma' },
+          { key: 'cc-by-4.0', label: 'CC-BY' },
+        ].map(({ key, label }) => {
+          const active = query.includes(`license:${key}`);
+          return (
+            <button
+              key={key}
+              title={`Filter to models tagged license:${key}.`}
+              onClick={() => {
+                let nextQuery: string;
+                if (active) {
+                  nextQuery = query.replace(new RegExp(`\\s*license:${key}\\b`), '').trim();
+                } else {
+                  // Replace any other license filter to avoid mutual contradiction.
+                  const cleaned = query.replace(/\s*license:[A-Za-z0-9.\-_]+/g, '').trim();
+                  nextQuery = (cleaned ? cleaned + ' ' : '') + `license:${key}`;
+                }
+                setQuery(nextQuery);
+                void runSearch({ query: nextQuery });
+              }}
+              style={{
+                fontSize: 10,
+                padding: '2px 6px',
+                borderRadius: 999,
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+                background: active ? 'var(--accent)' : 'transparent',
+                color: active ? '#fff' : 'var(--text-secondary)',
+                cursor: 'pointer',
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
       {results.length === 0 && !busy && (
         <div style={emptyStyle}>
           <div>No matches.</div>
@@ -418,6 +467,10 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
             expanded={openCardId === hit.id}
             onToggleExpand={() => setOpenCardId((cur) => (cur === hit.id ? null : hit.id))}
             onErr={onErr}
+            onSearchBy={(newQuery) => {
+              setQuery(newQuery);
+              void runSearch({ query: newQuery });
+            }}
           />
         ))}
       </div>
@@ -431,12 +484,17 @@ function ResultCard({
   onToggleExpand,
   onErr,
   researchMode,
+  onSearchBy,
 }: {
   hit: HFSearchHit;
   expanded: boolean;
   onToggleExpand: () => void;
   onErr: (msg: string | null) => void;
   researchMode?: boolean;
+  /** Called when the user clicks a clickable chip (tag / author /
+   *  pipelineTag) on the card — rebroadcasts the new query up to
+   *  BrowseTab so it can rerun the search. */
+  onSearchBy?: (newQuery: string) => void;
 }) {
   const [card, setCard] = useState<HFModelCard | null>(null);
   const [busy, setBusy] = useState(false);
@@ -486,7 +544,40 @@ function ResultCard({
             {hit.gated && <span style={badgeWarnStyle}>gated</span>}
           </div>
           <div style={cardMetaStyle}>
-            {hit.pipelineTag && <span>{hit.pipelineTag}</span>}
+            {hit.author && (
+              <button
+                onClick={() => onSearchBy?.(hit.author)}
+                title={`Search for other models by ${hit.author}.`}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: onSearchBy ? 'pointer' : 'default',
+                  color: 'inherit',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline dotted',
+                }}
+              >
+                @{hit.author}
+              </button>
+            )}
+            {hit.pipelineTag && (
+              <button
+                onClick={() => onSearchBy?.(hit.pipelineTag!)}
+                title={`Search for models with task "${hit.pipelineTag}".`}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: onSearchBy ? 'pointer' : 'default',
+                  color: 'inherit',
+                  padding: 0,
+                  fontSize: 'inherit',
+                  textDecoration: 'underline dotted',
+                }}
+              >
+                {hit.pipelineTag}
+              </button>
+            )}
             <span>↓ {formatCount(hit.downloads)}</span>
             <span>♥ {formatCount(hit.likes)}</span>
             {hit.libraryName && <span>📚 {hit.libraryName}</span>}
@@ -502,7 +593,18 @@ function ResultCard({
           {hit.tags.length > 0 && (
             <div style={tagRowStyle}>
               {hit.tags.slice(0, 6).map((t) => (
-                <span key={t} style={tagChipStyle}>{t}</span>
+                <button
+                  key={t}
+                  onClick={() => onSearchBy?.(t)}
+                  title={`Search for models tagged "${t}".`}
+                  style={{
+                    ...tagChipStyle,
+                    border: 'none',
+                    cursor: onSearchBy ? 'pointer' : 'default',
+                  }}
+                >
+                  {t}
+                </button>
               ))}
             </div>
           )}
@@ -570,6 +672,13 @@ function ResultCard({
                 onErr={onErr}
                 researchMode={researchMode}
               />
+              {card.ggufMeta?.chatTemplate && (
+                <ChatTemplateViewer
+                  chatTemplate={card.ggufMeta.chatTemplate}
+                  bosToken={card.ggufMeta.bosToken}
+                  eosToken={card.ggufMeta.eosToken}
+                />
+              )}
             </>
           )}
         </div>
@@ -610,7 +719,7 @@ function GgufVariantList({
 
   // Per-fileName direct-download state, keyed by GGUF file name.
   const [downloadState, setDownloadState] = useState<
-    Record<string, { percent: number | null; bytesCompleted: number; bytesTotal: number | null; done: boolean; error: string | null }>
+    Record<string, { percent: number | null; bytesCompleted: number; bytesTotal: number | null; bytesPerSec: number | null; etaSeconds: number | null; done: boolean; error: string | null }>
   >({});
 
   useEffect(() => () => {
@@ -627,6 +736,8 @@ function GgufVariantList({
           percent: ev.percent,
           bytesCompleted: ev.bytesCompleted,
           bytesTotal: ev.bytesTotal,
+          bytesPerSec: ev.bytesPerSec ?? null,
+          etaSeconds: ev.etaSeconds ?? null,
           done: ev.done,
           error: ev.error,
         },
@@ -676,16 +787,20 @@ function GgufVariantList({
   const handleDownload = async (fileName: string) => {
     setDownloadState((s) => ({
       ...s,
-      [fileName]: { percent: 0, bytesCompleted: 0, bytesTotal: null, done: false, error: null },
+      [fileName]: { percent: 0, bytesCompleted: 0, bytesTotal: null, bytesPerSec: null, etaSeconds: null, done: false, error: null },
     }));
     try {
       const r = await window.electronAPI.hf.download(repoId, fileName);
-      if (!r.ok) {
+      if (!r.ok && r.error !== 'cancelled') {
         onErr(`Download failed: ${r.error ?? 'unknown error'}`);
       }
     } catch (e) {
       onErr(formatError(e));
     }
+  };
+
+  const handleCancelDownload = (fileName: string) => {
+    void window.electronAPI.hf.cancelDownload(repoId, fileName).catch(() => undefined);
   };
 
   return (
@@ -796,7 +911,22 @@ function GgufVariantList({
                   <span style={{ ...subtleStyle, fontSize: 10 }}>
                     {fmtBytes(dl.bytesCompleted)}
                     {dl.bytesTotal ? ` / ${fmtBytes(dl.bytesTotal)}` : ''}
+                    {dl.bytesPerSec ? ` · ${fmtBytes(dl.bytesPerSec)}/s` : ''}
+                    {dl.etaSeconds != null ? ` · ${fmtDuration(dl.etaSeconds)} left` : ''}
                   </span>
+                  <button
+                    onClick={() => handleCancelDownload(v.fileName)}
+                    title="Cancel this download. The partial file is discarded."
+                    style={{
+                      ...smallBtnStyle,
+                      padding: '2px 6px',
+                      fontSize: 10,
+                      color: '#fda4af',
+                      borderColor: '#fda4af',
+                    }}
+                  >
+                    ✕ cancel
+                  </button>
                 </div>
               )}
               {dl?.error && (
@@ -905,15 +1035,48 @@ function CachedTab({ onErr }: { onErr: (msg: string | null) => void }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-          {entries.map((e) => (
-            <div key={e.id} style={cachedRowStyle}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{e.id}</div>
-                <div style={subtleStyle}>{fmtBytes(e.sizeBytes)}</div>
+          {entries.map((e) => {
+            const repoCachePath = cachePath ? `${cachePath.replace(/[\\/]+$/, '')}/${e.dirName}` : null;
+            return (
+              <div key={e.id} style={cachedRowStyle}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{e.id}</div>
+                  <div style={subtleStyle}>{fmtBytes(e.sizeBytes)}</div>
+                </div>
+                {repoCachePath && (
+                  <button
+                    onClick={() => {
+                      void window.electronAPI.models
+                        .openExternal(`file:///${repoCachePath.replace(/\\/g, '/')}`)
+                        .catch(() => undefined);
+                    }}
+                    style={btnStyle}
+                    title="Open this repo's cache folder in the OS file explorer."
+                  >
+                    Open ↗
+                  </button>
+                )}
+                {repoCachePath && (
+                  <button
+                    onClick={() => {
+                      void window.electronAPI.app.clipboardWrite(repoCachePath);
+                    }}
+                    style={btnStyle}
+                    title="Copy the cache directory path to clipboard."
+                  >
+                    Copy path
+                  </button>
+                )}
+                <button
+                  onClick={() => void remove(e.id)}
+                  style={btnStyle}
+                  title="Delete this repo's cached files. Re-download to use again."
+                >
+                  Remove
+                </button>
               </div>
-              <button onClick={() => void remove(e.id)} style={btnStyle}>Remove</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
@@ -1149,6 +1312,10 @@ function ResearchBrowse({ onErr }: { onErr: (msg: string | null) => void }) {
             onToggleExpand={() => setOpenCardId((cur) => (cur === hit.id ? null : hit.id))}
             onErr={onErr}
             researchMode
+            onSearchBy={(q) => {
+              setQuery(q);
+              void runSearch();
+            }}
           />
         ))}
       </div>
@@ -1405,6 +1572,102 @@ function qualityHintFor(quant: string | null): string {
  *  hover tooltip on the size badge. */
 function estimateVramBytes(fileSize: number): number {
   return Math.round(fileSize * 1.25);
+}
+
+/**
+ * v4.0.2 round 10: a collapsible viewer for the GGUF chat template +
+ * BOS/EOS tokens.  Lets the user inspect the exact Jinja template the
+ * model expects without leaving the app.
+ */
+function ChatTemplateViewer({
+  chatTemplate,
+  bosToken,
+  eosToken,
+}: {
+  chatTemplate: string;
+  bosToken: string | null;
+  eosToken: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ marginTop: 10, border: '1px solid var(--border)', borderRadius: 6 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Show the Jinja chat template baked into the GGUF. Tells you what message format the model expects."
+        style={{
+          width: '100%',
+          padding: '6px 10px',
+          background: 'transparent',
+          border: 'none',
+          color: 'var(--text-primary)',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          textAlign: 'left',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span style={{ width: 12, display: 'inline-block' }}>{open ? '▼' : '▶'}</span>
+        Prompt format (chat template)
+      </button>
+      {open && (
+        <div style={{ padding: 10, borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 6, fontSize: 10, color: 'var(--text-secondary)' }}>
+            {bosToken && (
+              <span>
+                BOS: <code style={{ color: 'var(--accent-light)' }}>{bosToken}</code>
+              </span>
+            )}
+            {eosToken && (
+              <span>
+                EOS: <code style={{ color: 'var(--accent-light)' }}>{eosToken}</code>
+              </span>
+            )}
+          </div>
+          <pre
+            style={{
+              fontFamily: 'ui-monospace, Consolas, monospace',
+              fontSize: 10,
+              color: 'var(--text-secondary)',
+              background: 'var(--bg-primary)',
+              padding: 8,
+              borderRadius: 4,
+              maxHeight: 240,
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              margin: 0,
+            }}
+          >
+            {chatTemplate}
+          </pre>
+          <button
+            onClick={() => {
+              void window.electronAPI.app.clipboardWrite(chatTemplate);
+            }}
+            style={{ ...smallBtnStyle, marginTop: 6 }}
+            title="Copy the chat template to the clipboard."
+          >
+            Copy template
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "1h 23m" / "3m 42s" / "12s" — short-form duration. */
+function fmtDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '?';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m < 60) return `${m}m ${s}s`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return `${h}h ${rm}m`;
 }
 
 function formatCount(n: number): string {

@@ -1451,6 +1451,14 @@ function setupHuggingFace() {
       });
     }
   );
+
+  ipcMain.handle(
+    IPC.HF_CANCEL_DOWNLOAD,
+    (_event, repoIdRaw: unknown, fileNameRaw: unknown): boolean => {
+      if (typeof repoIdRaw !== 'string' || typeof fileNameRaw !== 'string') return false;
+      return getHuggingFace().cancelDownload(repoIdRaw, fileNameRaw);
+    }
+  );
 }
 
 function setupTray() {
