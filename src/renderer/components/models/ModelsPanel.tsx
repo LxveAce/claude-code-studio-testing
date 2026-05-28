@@ -715,7 +715,7 @@ export function ModelsPanel() {
                   onClick={(e) => {
                     e.stopPropagation();
                     void window.electronAPI.models
-                      .popout(r.paneId, r.modelName)
+                      .popout(r.paneId, r.modelName, r.modelId)
                       .catch(() => undefined);
                   }}
                   title="Pop out into its own window"

@@ -65,10 +65,14 @@ export function App() {
     const sp = new URLSearchParams(window.location.search);
     const paneId = sp.get('popout');
     if (!paneId) return null;
-    return { paneId, label: sp.get('label') ?? 'Model' };
+    return {
+      paneId,
+      label: sp.get('label') ?? 'Model',
+      profile: sp.get('profile') ?? undefined,
+    };
   })();
   if (popoutParams) {
-    return <PopoutView paneId={popoutParams.paneId} label={popoutParams.label} />;
+    return <PopoutView paneId={popoutParams.paneId} label={popoutParams.label} profile={popoutParams.profile} />;
   }
 
   const [hydrated, setHydrated] = useState(false);

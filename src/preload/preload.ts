@@ -235,8 +235,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     launch: (modelId: string, cwd?: string) =>
       ipcRenderer.invoke(IPC.MODELS_LAUNCH, modelId, cwd ?? null),
     openExternal: (url: string) => ipcRenderer.invoke(IPC.MODELS_OPEN_EXTERNAL, url),
-    popout: (paneId: string, label?: string) =>
-      ipcRenderer.invoke(IPC.MODELS_POPOUT, paneId, label ?? null),
+    popout: (paneId: string, label?: string, profile?: string) =>
+      ipcRenderer.invoke(IPC.MODELS_POPOUT, paneId, label ?? null, profile ?? null),
     onboardingGet: () => ipcRenderer.invoke(IPC.MODELS_ONBOARDING_GET),
     onboardingMarkShown: (outcome: 'skipped' | 'completed') =>
       ipcRenderer.invoke(IPC.MODELS_ONBOARDING_MARK_SHOWN, outcome),

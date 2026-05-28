@@ -286,7 +286,7 @@ interface Window {
       recommend: (cwd?: string) => Promise<import('./shared/types').ModelRecommendation[]>;
       launch: (modelId: string, cwd?: string) => Promise<import('./shared/types').ModelLaunchResult>;
       openExternal: (url: string) => Promise<boolean>;
-      popout: (paneId: string, label?: string) => Promise<import('./shared/types').ModelPopoutResult>;
+      popout: (paneId: string, label?: string, profile?: string) => Promise<import('./shared/types').ModelPopoutResult>;
       onboardingGet: () => Promise<import('./shared/types').ModelsOnboardingState>;
       onboardingMarkShown: (
         outcome: 'skipped' | 'completed'

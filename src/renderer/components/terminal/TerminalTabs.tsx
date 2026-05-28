@@ -218,7 +218,7 @@ export function TerminalTabs({
       // from the tab strip would orphan the PTY; we keep it instead so the
       // user can close the popout and still get back to the session.
       void window.electronAPI.models
-        .popout(tab.paneId, tab.label)
+        .popout(tab.paneId, tab.label, tab.profile)
         .catch(() => undefined);
     },
     [tabs]

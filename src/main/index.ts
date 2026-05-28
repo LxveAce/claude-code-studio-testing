@@ -901,7 +901,7 @@ function setupFirstRun() {
 function setupPopout() {
   ipcMain.handle(
     IPC.MODELS_POPOUT,
-    (_event, paneId: unknown, label: unknown): ModelPopoutResult => {
+    (_event, paneId: unknown, label: unknown, profile: unknown): ModelPopoutResult => {
       if (!PtyRegistry.isValidPaneId(paneId)) {
         return { ok: false, windowId: null, error: 'invalid paneId' };
       }
@@ -920,6 +920,15 @@ function setupPopout() {
         typeof label === 'string' && label.length > 0 && label.length <= 128
           ? label
           : 'Model';
+      // The profile string is a catalog id (or 'claude' for the bundled CLI).
+      // We URL-encode it into the popout query so the popout renderer can
+      // pick the correct chat-skin variant (TUI vs stream-json) without
+      // round-tripping to main.  Length bound + character allowlist to
+      // keep the URL clean.
+      const safeProfile =
+        typeof profile === 'string' && profile.length > 0 && profile.length <= 128 && /^[a-zA-Z0-9._\-:]+$/.test(profile)
+          ? profile
+          : null;
       const popoutId = `models-popout:${paneId}`;
       const savedPopoutState = getWindowState().loadState(popoutId, {
         x: -1,
@@ -959,8 +968,11 @@ function setupPopout() {
 
         // Load the same HTML the main window uses, with query params the
         // renderer's popout-mode branch parses. URL-encode the label so
-        // the renderer can display it in the title bar.
-        const query = `?popout=${encodeURIComponent(paneId)}&label=${encodeURIComponent(safeLabel)}`;
+        // the renderer can display it in the title bar.  profile is
+        // optional — older callers omit it; renderer falls back to the
+        // generic chat-skin path if not present.
+        const profileQ = safeProfile ? `&profile=${encodeURIComponent(safeProfile)}` : '';
+        const query = `?popout=${encodeURIComponent(paneId)}&label=${encodeURIComponent(safeLabel)}${profileQ}`;
         if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
           void win.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}${query}`);
         } else {
