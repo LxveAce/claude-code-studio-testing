@@ -291,6 +291,9 @@ original deferred list.
 
 ### Followups surfaced this session (priority order)
 
+Two of the original six shipped in PR #21 (polish pass — Aider submit
+flag + renderer-side tab cap). Four remain:
+
 1. **Verify Claude CLI flag surface for chat-mode** (H-1 in
    `SECURITY_REVIEW_CHAT_MODE.md`). The catalog uses
    `['--print', '--input-format=stream-json', '--output-format=stream-json', '--verbose']`
@@ -307,13 +310,6 @@ original deferred list.
 4. **`EmbeddedTerminal` PID surfacing** (M-2 in TerminalTabs review).
    StatusBar shows PID 0 for model tabs because `EmbeddedTerminal`
    doesn't subscribe to a `ready` event.
-5. **Aider Quick-Action `submit` flag** (M-1 in Commands-tab-mirror
-   review). Add `submit: boolean` to `CommandDef`; "starter" commands
-   (`/add `) should land in the composer mid-typing, not auto-submit
-   empty.
-6. **Renderer-side tab count cap** (M-1 in TerminalTabs review).
-   Match SessionService's `MAX_TABS = 32` cap to avoid PtyRegistry
-   rejection surfacing as a dead tab.
 
 None of these block the next session — they're polish on shipping
 work.
@@ -350,11 +346,9 @@ work.
   already-spawned PTYs. Cosmetic only — Resource panel still tracks
   the model PTY bucket. Tracked as M-2 in
   `SECURITY_REVIEW_COMMANDS_TAB.md`.
-- **Aider quick-action "starter" auto-submit**: clicking "Add file"
-  sends `/add \r` (trailing space submits empty). Aider prints a
-  usage error; user has to retype. Tracked as M-1 in
-  `SECURITY_REVIEW_COMMANDS_TAB.md`. Per-command `submit` flag is
-  the fix.
+- **Model tab StatusBar PID display** is the only remaining UI gap
+  from the prior red-teams. Resource panel still shows the model
+  PTY bucket correctly; this is the PID footer cosmetic only.
 
 ---
 
@@ -430,6 +424,8 @@ to ship a public update.
   `docs/security-reviews/SECURITY_REVIEW_COMMANDS_TAB.md`.
 - **Chat-mode security review:**
   `docs/security-reviews/SECURITY_REVIEW_CHAT_MODE.md`.
+- **Polish-pass security review (PR #21):**
+  `docs/security-reviews/SECURITY_REVIEW_POLISH.md`.
 - **Per-file LMM journals:** `journal/` mirrors `src/` paths.
 - **Multi-provider design notes:** `docs/MULTI_PROVIDER_BRAINSTORM.md`.
 - **Backlog:** `docs/BACKLOG.md`.

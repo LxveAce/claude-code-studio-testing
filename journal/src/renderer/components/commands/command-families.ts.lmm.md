@@ -156,3 +156,28 @@ Related entries:
   Actions tab.
 - [[TerminalTabs.tsx.lmm.md]] — owns the active tab whose `profile`
   feeds `deriveCommandFamily`.
+
+---
+
+## Addendum — per-command `submit` flag (PR #21 polish pass)
+
+Closes M-1 from `docs/security-reviews/SECURITY_REVIEW_COMMANDS_TAB.md`.
+
+`CommandDef` gained an optional `submit?: boolean` (default `true`). When
+`false`, clicking the quick action lands the command text in the active
+pane *without* appending a submit char (CR / newline). Intended for
+"starter" commands that need a user-supplied argument:
+- Aider: `/add `, `/drop `, `/ask `, `/code `, `/architect `, `/run `
+- Ollama: `/set system `
+
+`QuickCommands.onSendCommand` was extended to take `(command, submit)`,
+forwarded from `CommandsPanel` → `App.handleSendCommand` →
+`sendToActive(command, submit)`. The default-true behavior is preserved
+for every existing command, so this is a backward-compatible additive
+change.
+
+Trade-off accepted: `submit:false` commands no longer auto-focus the
+composer for typing. The user has to click into the terminal pane and
+finish typing themselves. Adding a "click → focus composer + cursor at
+end" effect would require renderer→PTY signaling we don't have today;
+filed for a future iteration if it becomes a real UX papercut.

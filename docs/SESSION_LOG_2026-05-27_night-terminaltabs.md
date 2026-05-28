@@ -230,3 +230,49 @@ Three PRs sitting in the testing repo:
 Merge in order. Each subsequent base will auto-rebase to master after
 the prior merges. No conflicts expected — each PR's file overlap with
 the parent is additive in a different direction.
+
+---
+
+## Addendum 3 — Polish pass (PR #21, fourth commit of the session)
+
+After PR #20 the user said "continue" again. Picked off two small
+closeable items from the followups list: M-1 from
+`SECURITY_REVIEW_COMMANDS_TAB.md` (Aider Quick-Action starter
+auto-submit) and M-1 from `SECURITY_REVIEW_TERMINAL_TABS.md`
+(renderer-side tab count cap).
+
+Branch: `feature/polish-m1s` stacked on `feature/claude-chat-mode`.
+
+### What got built
+
+| File | Change |
+|---|---|
+| `command-families.ts` | `CommandDef` gains `submit?: boolean` (default true). Aider's trailing-space starters (`/add`, `/drop`, `/ask`, `/code`, `/architect`, `/run`) marked `submit:false`. Ollama's `/set system ` same. |
+| `QuickCommands.tsx` | `onSendCommand` signature: `(command, submit?)`. Click handler passes `cmd.submit !== false`. |
+| `CommandsPanel.tsx` | Same prop forwarding. |
+| `App.tsx` | `handleSendCommand` accepts optional `submit` flag (default true) and forwards to `sendToActive`. `RightPanel` prop type updated. |
+| `TerminalTabs.tsx` | `MAX_TABS_RENDERER = 32`. `addClaudeTab` + `addModelTab` short-circuit + set `capNotice` when at cap. Yellow banner above content area, 4s auto-dismiss. `role="status"` for SR. |
+| `command-families.ts.lmm.md` | Addendum for submit flag. |
+| `TerminalTabs.tsx.lmm.md` | Addendum for MAX_TABS cap. |
+| `SECURITY_REVIEW_POLISH.md` | **New** small red-team — 0 Crit, 0 High, 2 Medium follow-ups (no auto-focus after submit:false; capNotice doesn't survive panel switch), 1 Low (i18n). |
+| `STATUS.md` | Followups list 6 → 4. Pointers list adds the polish review. |
+
+### Verification
+
+- ✅ `npx tsc --noEmit` clean.
+- ✅ `npx vite build` clean.
+- ✅ `node scripts/runtime-verify.mjs` — 30 assertions pass.
+
+### Final state of the night
+
+Four PRs sitting in the testing repo, all stacked:
+- PR #18 — foundation
+- PR #19 — commands + H-1 + verifier
+- PR #20 — chat-mode
+- PR #21 — polish (this commit)
+
+Followups list down to 4 items, all bounded:
+1. Verify chat-mode flag surface against a real Claude binary
+2. Tool-use / thinking renderer in chat skin
+3. "Stop generation" button in chat skin
+4. EmbeddedTerminal PID surfacing

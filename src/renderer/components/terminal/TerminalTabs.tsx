@@ -57,6 +57,12 @@ export interface TerminalTabsProps {
   cwd?: string | null;
 }
 
+/** Hard cap matching SessionService's MAX_TABS (32). The backend
+ *  rejects spawns past PtyRegistry.MAX_PANES (16 for Claude tabs) and
+ *  the persistence sanitizer trims tabs beyond 32, but failing here
+ *  with a clear notice beats a silent half-broken tab in the strip. */
+const MAX_TABS_RENDERER = 32;
+
 export function TerminalTabs({
   tabs,
   activeTabId,
@@ -70,10 +76,22 @@ export function TerminalTabs({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [capNotice, setCapNotice] = useState<string | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
+  // Drop the "you hit the cap" toast after 4s so it doesn't linger.
+  useEffect(() => {
+    if (!capNotice) return;
+    const t = setTimeout(() => setCapNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [capNotice]);
+
   const addClaudeTab = useCallback(() => {
+    if (tabs.length >= MAX_TABS_RENDERER) {
+      setCapNotice(`Tab limit reached (${MAX_TABS_RENDERER}). Close a tab first.`);
+      return;
+    }
     const id = `tab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     const paneId = `p_${id.slice(4)}`;
     const next: TerminalTab = {
@@ -86,10 +104,14 @@ export function TerminalTabs({
     // Updater form: rapid `+` clicks must not drop tabs added between renders.
     onTabsChange((prev) => [...prev, next]);
     onActiveChange(id);
-  }, [onTabsChange, onActiveChange]);
+  }, [tabs.length, onTabsChange, onActiveChange]);
 
   const addModelTab = useCallback(
     async (m: ModelDefinition) => {
+      if (tabs.length >= MAX_TABS_RENDERER) {
+        setCapNotice(`Tab limit reached (${MAX_TABS_RENDERER}). Close a tab first.`);
+        return;
+      }
       const id = `tab_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       // Insert a placeholder tab immediately so the UI doesn't feel laggy.
       const placeholder: TerminalTab = {
@@ -226,6 +248,20 @@ export function TerminalTabs({
         />
       </div>
 
+      {capNotice && (
+        <div
+          role="status"
+          style={{
+            padding: '6px 12px',
+            fontSize: 11,
+            color: '#fcd34d',
+            background: 'rgba(251,191,36,0.08)',
+            borderBottom: '1px solid rgba(251,191,36,0.25)',
+          }}
+        >
+          {capNotice}
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         {tabs.length === 0 && (
           <div style={emptyStateStyle}>

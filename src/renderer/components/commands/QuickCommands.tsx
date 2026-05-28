@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import type { CommandDef } from './command-families';
 
 interface QuickCommandsProps {
-  onSendCommand: (command: string) => void;
+  /** Now accepts an optional submit flag. CommandsPanel forwards each
+   *  CommandDef's `submit` field (default true) so starter commands
+   *  land in the composer without auto-submitting an empty argument. */
+  onSendCommand: (command: string, submit?: boolean) => void;
   /** Commands to render, grouped by `category`. */
   commands: CommandDef[];
   /** Pill order. Categories not present in `commands` collapse to empty. */
@@ -88,7 +91,7 @@ export function QuickCommands({
           return (
             <button
               key={cmd.command}
-              onClick={() => onSendCommand(cmd.command)}
+              onClick={() => onSendCommand(cmd.command, cmd.submit !== false)}
               onMouseEnter={() => setHoveredCmd(cmd.command)}
               onMouseLeave={() => setHoveredCmd(null)}
               style={{

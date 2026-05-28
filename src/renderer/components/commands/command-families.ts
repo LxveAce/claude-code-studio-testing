@@ -31,6 +31,11 @@ export interface CommandDef {
   command: string;
   description: string;
   category: string;
+  /** When false, the command lands in the terminal *without* a trailing
+   *  submit (CR / newline). Used for "starter" commands like Aider's
+   *  `/add ` that need a filename after them — auto-submitting would
+   *  send `/add ` with no arg and the CLI errors out. Default `true`. */
+  submit?: boolean;
 }
 
 export interface CommandFamilyConfig {
@@ -179,7 +184,7 @@ const OLLAMA_QUICK: CommandDef[] = [
   { label: 'License', command: '/show license', description: 'Model license', category: 'Inspect' },
   { label: 'Clear', command: '/clear', description: 'Reset session context', category: 'Session' },
   { label: 'Exit', command: '/bye', description: 'Leave the REPL', category: 'Session' },
-  { label: 'Set system', command: '/set system ', description: 'Then type the prompt', category: 'Settings' },
+  { label: 'Set system', command: '/set system ', description: 'Then type the prompt', category: 'Settings', submit: false },
   { label: 'History on', command: '/set history', description: 'Enable history', category: 'Settings' },
   { label: 'History off', command: '/set nohistory', description: 'Disable history', category: 'Settings' },
   { label: 'Help', command: '/?', description: 'Command help', category: 'Info' },
@@ -231,16 +236,18 @@ const AIDER_SLASH: Record<string, CommandEntry[]> = {
 };
 
 const AIDER_QUICK: CommandDef[] = [
-  { label: 'Add file', command: '/add ', description: 'Then type the path', category: 'Files' },
-  { label: 'Drop file', command: '/drop ', description: 'Then type the path', category: 'Files' },
+  // "Starter" commands — trailing-space + submit:false so the command
+  // lands typed in the prompt and the user can finish the argument.
+  { label: 'Add file', command: '/add ', description: 'Then type the path', category: 'Files', submit: false },
+  { label: 'Drop file', command: '/drop ', description: 'Then type the path', category: 'Files', submit: false },
   { label: 'List files', command: '/ls', description: 'Files in chat', category: 'Files' },
   { label: 'Diff', command: '/diff', description: 'Pending changes', category: 'Git' },
   { label: 'Commit', command: '/commit', description: 'Commit changes', category: 'Git' },
   { label: 'Undo', command: '/undo', description: "Undo aider's last commit", category: 'Git' },
-  { label: 'Ask', command: '/ask ', description: "Ask, don't change code", category: 'Mode' },
-  { label: 'Code', command: '/code ', description: 'Request code changes', category: 'Mode' },
-  { label: 'Architect', command: '/architect ', description: 'Plan-first mode', category: 'Mode' },
-  { label: 'Run', command: '/run ', description: 'Shell command + share output', category: 'Run' },
+  { label: 'Ask', command: '/ask ', description: "Ask, don't change code", category: 'Mode', submit: false },
+  { label: 'Code', command: '/code ', description: 'Request code changes', category: 'Mode', submit: false },
+  { label: 'Architect', command: '/architect ', description: 'Plan-first mode', category: 'Mode', submit: false },
+  { label: 'Run', command: '/run ', description: 'Shell command + share output', category: 'Run', submit: false },
   { label: 'Test', command: '/test', description: 'Project test command', category: 'Run' },
   { label: 'Lint', command: '/lint', description: 'Project lint command', category: 'Run' },
   { label: 'Clear', command: '/clear', description: 'Clear chat history', category: 'Session' },

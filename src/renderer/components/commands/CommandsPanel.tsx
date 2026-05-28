@@ -3,7 +3,10 @@ import { QuickCommands } from './QuickCommands';
 import { COMMAND_FAMILIES, type CommandFamily } from './command-families';
 
 interface CommandsPanelProps {
-  onSendCommand: (command: string) => void;
+  /** Optional `submit` arg lets per-command settings opt out of the
+   *  default auto-submit-on-click behavior; CommandDef.submit === false
+   *  routes the command into the composer without an Enter at the end. */
+  onSendCommand: (command: string, submit?: boolean) => void;
   /** Family of the currently active terminal tab. Drives which command
    *  list, quick actions, and shortcuts to surface. Defaults to 'claude'
    *  if not provided so the panel renders sensibly in isolation. */
