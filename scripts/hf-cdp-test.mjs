@@ -298,18 +298,26 @@ function assert(name, cond, detail) {
   assert('curated research list renders', curatedRendered);
 
   // 14) Verify every curated repo resolves via hf.modelInfo (no 404s).
+  //     Expanded to 17 entries per the empirical survey.
   const curatedRepos = [
-    'failspy/Meta-Llama-3-8B-Instruct-abliterated-v3-GGUF',
+    'bartowski/DeepSeek-R1-Distill-Qwen-32B-abliterated-GGUF',
     'bartowski/dolphin-2.9-llama3-8b-GGUF',
-    'mradermacher/Llama-3.1-8B-Lexi-Uncensored-V2-GGUF',
     'bartowski/Llama-3.2-3B-Instruct-uncensored-GGUF',
-    'TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF',
+    'TheBloke/dolphin-2.5-mixtral-8x7b-GGUF',
     'TheBloke/Wizard-Vicuna-13B-Uncensored-GGUF',
     'bartowski/Hermes-3-Llama-3.1-8B-GGUF',
+    'bartowski/Hermes-3-Llama-3.1-70B-GGUF',
+    'mradermacher/DeepSeek-R1-Distill-Llama-70B-abliterated-GGUF',
+    'cognitivecomputations/dolphin-2.9.4-llama3.1-8b-gguf',
     'mradermacher/dolphin-2.9.4-llama3.1-8b-GGUF',
-    'failspy/Phi-3-mini-128k-instruct-abliterated-v3-GGUF',
+    'mradermacher/dolphin-2.7-mixtral-8x7b-GGUF',
+    'failspy/Meta-Llama-3-8B-Instruct-abliterated-v3-GGUF',
     'failspy/Llama-3-70B-Instruct-abliterated-GGUF',
-    'TheBloke/dolphin-2.5-mixtral-8x7b-GGUF',
+    'failspy/Phi-3-mini-128k-instruct-abliterated-v3-GGUF',
+    'mlabonne/NeuralDaredevil-8B-abliterated-GGUF',
+    'mlabonne/Daredevil-8B-abliterated-GGUF',
+    'mradermacher/Llama-3.1-8B-Lexi-Uncensored-V2-GGUF',
+    'TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF',
   ];
   for (const repo of curatedRepos) {
     const r = await client.eval(`

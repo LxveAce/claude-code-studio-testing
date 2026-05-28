@@ -355,28 +355,31 @@ export class HuggingFaceService {
         additionalFields: ['tags', 'cardData', 'siblings', 'gguf', 'library_name'],
       } as Parameters<typeof mod.modelInfo>[0]);
       const info = infoRaw as ModelInfoLoose;
-      // siblings is the authoritative file list.  Fall back to
-      // listFiles only if siblings is empty/absent for some reason.
+      // v4.0.2 deep-debug: use listFiles as PRIMARY source (it
+      // carries per-file size via paths-info), and merge in any names
+      // from `siblings` that listFiles didn't return.  siblings alone
+      // has no size data, which broke the hardware FitBadge.
       const files: { path: string; size: number | null }[] = [];
+      const seen = new Set<string>();
+      try {
+        for await (const f of mod.listFiles({ repo: { type: 'model', name: repoId } })) {
+          if (typeof f.path !== 'string') continue;
+          files.push({
+            path: f.path,
+            size: typeof f.size === 'number' ? f.size : null,
+          });
+          seen.add(f.path);
+          if (files.length >= 200) break;
+        }
+      } catch {
+        // gated / auth / network — fall through to siblings.
+      }
       const siblings = Array.isArray(info.siblings) ? info.siblings : [];
       for (const s of siblings) {
         const fname = (s as { rfilename?: unknown }).rfilename;
-        if (typeof fname !== 'string') continue;
+        if (typeof fname !== 'string' || seen.has(fname)) continue;
         files.push({ path: fname, size: null });
-      }
-      if (files.length === 0) {
-        try {
-          for await (const f of mod.listFiles({ repo: { type: 'model', name: repoId } })) {
-            if (typeof f.path !== 'string') continue;
-            files.push({
-              path: f.path,
-              size: typeof f.size === 'number' ? f.size : null,
-            });
-            if (files.length >= 200) break;
-          }
-        } catch {
-          // gated/auth — surface whatever metadata we already have.
-        }
+        seen.add(fname);
       }
       const ggufFiles = files.filter((f) => /\.gguf$/i.test(f.path));
       const gguf: HFGgufVariant[] = ggufFiles.map((f) => ({
@@ -711,10 +714,31 @@ function clampInt(n: unknown, lo: number, hi: number): number {
 }
 
 function extractQuantTag(fileName: string): string | null {
-  // Common GGUF quant tags: Q2_K, Q3_K_S, Q4_0, Q4_K_M, Q5_0, Q5_K_M,
-  // Q6_K, Q8_0, F16, BF16, F32, IQ3_XS, IQ4_NL, etc.
-  const m = fileName.match(/\.((?:Q\d_K_[A-Z]+|Q\d_\d|IQ\d_[A-Z]+|F16|BF16|F32))\.gguf$/i);
-  return m ? m[1].toUpperCase() : null;
+  // v4.0.2 deep-debug: 20 real-filename regression tests in
+  // scripts/test-quant-regex.mjs cover this.  Uploaders use either
+  // `.`, `-`, or `_` as the separator and either upper- or lower-case
+  // quant tags.  We strip `.gguf`, then try each pattern by specificity.
+  const base = fileName.replace(/\.gguf$/i, '');
+  let m: RegExpMatchArray | null;
+  // Q-quants with K_X suffix: Q4_K_M, Q3_K_XL, Q5_K_S
+  m = base.match(/[._-](Q\d_K_[A-Z]+)$/i);
+  if (m) return m[1].toUpperCase();
+  // Q-quants with multi-digit suffix: Q4_0, Q4_0_4_4, Q5_1
+  m = base.match(/[._-](Q\d(?:_\d+)+)$/i);
+  if (m) return m[1].toUpperCase();
+  // I-quants: IQ3_M, IQ4_XS, IQ4_NL
+  m = base.match(/[._-](IQ\d_[A-Z]+)$/i);
+  if (m) return m[1].toUpperCase();
+  // Short forms: _q4, _q8
+  m = base.match(/[._-]q(\d)$/i);
+  if (m) return `Q${m[1]}`;
+  // Float quants
+  m = base.match(/[._-](BF16|F16|F32)$/i);
+  if (m) return m[1].toUpperCase();
+  // Q-quant with single trailing K: Q2_K, Q6_K
+  m = base.match(/[._-](Q\d_K)$/i);
+  if (m) return m[1].toUpperCase();
+  return null;
 }
 
 function decodeCacheDir(dirName: string): string | null {

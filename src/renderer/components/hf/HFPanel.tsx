@@ -30,84 +30,142 @@ const RESEARCH_CURATED: Array<{
   tier: 'low' | 'mid' | 'high';
   description: string;
 }> = [
+  // v4.0.2 deep-debug round 2: expanded from 9 to 17 entries based on the
+  // empirical survey in scripts/hf-research-survey.mjs.  Repos verified
+  // accessible (no auth wall) + present-day download counts captured.
+  // Ranked rough-by user-adoption so heavier-hitting models lead.
+  // ============================================================================
+  // === TOP TIER — highest community usage ===
   {
-    // v4.0.2 deep-debug: was `failspy/llama-3-8b-Instruct-...` (lowercase)
-    // which 404'd at the Hub.  Correct case-sensitive repo id.
-    repoId: 'failspy/Meta-Llama-3-8B-Instruct-abliterated-v3-GGUF',
+    repoId: 'bartowski/DeepSeek-R1-Distill-Qwen-32B-abliterated-GGUF',
     quant: 'Q4_K_M',
-    paramsLabel: '8B',
-    tier: 'mid',
-    description: 'Llama 3 8B with the refusal direction ablated (failspy method). Same intelligence, no canned "I can\'t help with that".',
+    paramsLabel: '32B',
+    tier: 'high',
+    description: 'DeepSeek-R1 reasoning distilled into Qwen 32B + abliterated. 131k context. ~40k downloads. Best uncensored reasoner currently available below 70B.',
   },
   {
     repoId: 'bartowski/dolphin-2.9-llama3-8b-GGUF',
     quant: 'Q4_K_M',
     paramsLabel: '8B',
     tier: 'mid',
-    description: 'Dolphin 2.9 fine-tune of Llama 3 8B. Uncensored conversational model — 38k downloads, well-tested.',
-  },
-  {
-    repoId: 'mradermacher/Llama-3.1-8B-Lexi-Uncensored-V2-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '8B',
-    tier: 'mid',
-    description: 'Lexi V2 uncensored Llama 3.1 8B. 131k context, llama3.1 license.',
+    description: 'Dolphin 2.9 fine-tune of Llama 3 8B. 38k downloads, well-tested. Strong conversational + light coding uncensored model.',
   },
   {
     repoId: 'bartowski/Llama-3.2-3B-Instruct-uncensored-GGUF',
     quant: 'Q4_K_M',
     paramsLabel: '3B',
     tier: 'low',
-    description: 'Llama 3.2 3B uncensored. Smallest entry — runs on 8 GB VRAM, 131k context.',
-  },
-  {
-    repoId: 'TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '7B',
-    tier: 'low',
-    description: 'Classic Wizard-Vicuna 7B uncensored. Lower bar to run; useful baseline for comparison.',
-  },
-  {
-    repoId: 'TheBloke/Wizard-Vicuna-13B-Uncensored-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '13B',
-    tier: 'mid',
-    description: 'Same fine-tune as the 7B but on the 13B Llama 2 base. More capable, needs ~10 GB VRAM at Q4_K_M.',
-  },
-  {
-    repoId: 'bartowski/Hermes-3-Llama-3.1-8B-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '8B',
-    tier: 'mid',
-    description: 'NousResearch Hermes 3 on Llama 3.1 8B. Not "uncensored" per se, but uses neutral alignment with minimal refusals.',
-  },
-  {
-    repoId: 'mradermacher/dolphin-2.9.4-llama3.1-8b-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '8B',
-    tier: 'mid',
-    description: 'Newer Dolphin 2.9.4 fine-tune of Llama 3.1 8B. 131k context, reduced safety filters; strong reasoning + coding.',
-  },
-  {
-    repoId: 'failspy/Phi-3-mini-128k-instruct-abliterated-v3-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '3.8B',
-    tier: 'low',
-    description: 'Phi-3-mini abliterated — 128k context in a tiny package. MIT-licensed. Great for low-VRAM experiments.',
-  },
-  {
-    repoId: 'failspy/Llama-3-70B-Instruct-abliterated-GGUF',
-    quant: 'Q4_K_M',
-    paramsLabel: '70B',
-    tier: 'high',
-    description: 'Abliterated Llama 3 70B — substantial capability. Needs ~40+ GB VRAM at Q4_K_M.',
+    description: 'Llama 3.2 3B uncensored. 29k downloads, 131k context. Smallest serious entry — runs on 4-8 GB GPUs.',
   },
   {
     repoId: 'TheBloke/dolphin-2.5-mixtral-8x7b-GGUF',
     quant: 'Q4_K_M',
     paramsLabel: 'MoE 8x7B',
     tier: 'high',
-    description: 'Dolphin 2.5 on Mixtral 8x7B. Strong uncensored MoE. Needs ~26 GB VRAM at Q4_K_M.',
+    description: 'Dolphin 2.5 on Mixtral 8x7B Apache 2.0. 17k downloads. Strong uncensored MoE, 32k context.',
+  },
+  {
+    repoId: 'TheBloke/Wizard-Vicuna-13B-Uncensored-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '13B',
+    tier: 'mid',
+    description: 'Classic Wizard-Vicuna 13B uncensored. 14k downloads. Llama 2 base, only 2k context but a reference baseline.',
+  },
+  // === REASONING / CODE ===
+  {
+    repoId: 'bartowski/Hermes-3-Llama-3.1-8B-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Hermes 3 on Llama 3.1 8B. 9k downloads. Neutral-alignment fine-tune from Nous Research — minimal refusals while staying coherent.',
+  },
+  {
+    repoId: 'bartowski/Hermes-3-Llama-3.1-70B-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '70B',
+    tier: 'high',
+    description: 'Hermes 3 on Llama 3.1 70B. Substantial capability. Needs ~40 GB VRAM at Q4_K_M.',
+  },
+  {
+    repoId: 'mradermacher/DeepSeek-R1-Distill-Llama-70B-abliterated-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '70B',
+    tier: 'high',
+    description: 'DeepSeek-R1 distilled into Llama 70B + abliterated. 131k context. Largest uncensored reasoner currently available.',
+  },
+  // === DOLPHIN VARIANTS ===
+  {
+    repoId: 'cognitivecomputations/dolphin-2.9.4-llama3.1-8b-gguf',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Official Cognitive Computations Dolphin 2.9.4 on Llama 3.1 8B. 131k context. Latest dolphin — uncensored, strong reasoning + tool use.',
+  },
+  {
+    repoId: 'mradermacher/dolphin-2.9.4-llama3.1-8b-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'mradermacher i-matrix quant of Dolphin 2.9.4 on Llama 3.1 8B. Better quality per byte than naive Q4 quants.',
+  },
+  {
+    repoId: 'mradermacher/dolphin-2.7-mixtral-8x7b-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: 'MoE 8x7B',
+    tier: 'high',
+    description: 'Earlier Dolphin 2.7 on Mixtral 8x7B. 32k context. Useful counterpoint to the 2.5 mixtral above.',
+  },
+  // === ABLITERATED LINEAGE ===
+  {
+    repoId: 'failspy/Meta-Llama-3-8B-Instruct-abliterated-v3-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'failspy v3 abliteration of Meta-Llama-3 8B Instruct. The technique that started the abliterated lineage — refusal direction ablated.',
+  },
+  {
+    repoId: 'failspy/Llama-3-70B-Instruct-abliterated-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '70B',
+    tier: 'high',
+    description: 'failspy abliteration of Llama 3 70B Instruct. Substantial capability without refusals. Needs ~40+ GB VRAM at Q4_K_M.',
+  },
+  {
+    repoId: 'failspy/Phi-3-mini-128k-instruct-abliterated-v3-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '3.8B',
+    tier: 'low',
+    description: 'Phi-3-mini abliterated — 128k context in a 3.8B package. MIT-licensed. Excellent for low-VRAM experiments and edge devices.',
+  },
+  {
+    repoId: 'mlabonne/NeuralDaredevil-8B-abliterated-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'mlabonne NeuralDaredevil 8B abliterated. DPO-refined abliteration that recovers some performance lost during refusal ablation.',
+  },
+  {
+    repoId: 'mlabonne/Daredevil-8B-abliterated-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'mlabonne Daredevil 8B abliterated. Earlier counterpart to NeuralDaredevil — useful comparison baseline.',
+  },
+  // === LEXI ===
+  {
+    repoId: 'mradermacher/Llama-3.1-8B-Lexi-Uncensored-V2-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '8B',
+    tier: 'mid',
+    description: 'Lexi V2 uncensored Llama 3.1 8B. 131k context. Llama 3.1 license. Strong RP + general-purpose uncensored model.',
+  },
+  // === LEGACY / BASELINE ===
+  {
+    repoId: 'TheBloke/Wizard-Vicuna-7B-Uncensored-GGUF',
+    quant: 'Q4_K_M',
+    paramsLabel: '7B',
+    tier: 'low',
+    description: 'Classic 7B Wizard-Vicuna uncensored. Lower bar to run; useful baseline for comparison against newer models.',
   },
 ];
 
@@ -206,16 +264,26 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
 
   const inFlight = useRef<number>(0);
 
-  const runSearch = useCallback(async () => {
+  // v4.0.2 deep-debug: the runSearch closure captures `query, task,
+  // ggufOnly, sort` at definition time.  Passing an override allows
+  // call-sites that set state AND search in one go (e.g. empty-state
+  // chips, license filter chips) to use the new values without waiting
+  // for React to flush the state update.
+  const runSearch = useCallback(async (overrides?: {
+    query?: string;
+    task?: string;
+    ggufOnly?: boolean;
+    sort?: HFSearchSort;
+  }) => {
     onErr(null);
     setBusy(true);
     const myReq = ++inFlight.current;
     try {
       const hits = await window.electronAPI.hf.search({
-        query: query.trim() || undefined,
-        task: task || undefined,
-        ggufOnly,
-        sort,
+        query: (overrides?.query ?? query).trim() || undefined,
+        task: (overrides?.task ?? task) || undefined,
+        ggufOnly: overrides?.ggufOnly ?? ggufOnly,
+        sort: overrides?.sort ?? sort,
         limit: 30,
       });
       if (myReq !== inFlight.current) return; // a newer search superseded us
@@ -295,7 +363,10 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
                 key={q}
                 onClick={() => {
                   setQuery(q);
-                  setTimeout(() => void runSearch(), 0);
+                  // Pass the new query inline; otherwise the closure
+                  // captures the old (empty) query and we search for
+                  // nothing.
+                  void runSearch({ query: q });
                 }}
                 style={{
                   border: '1px solid var(--border)',
@@ -319,7 +390,7 @@ function BrowseTab({ onErr }: { onErr: (msg: string | null) => void }) {
               <button
                 onClick={() => {
                   setGgufOnly(false);
-                  setTimeout(() => void runSearch(), 0);
+                  void runSearch({ ggufOnly: false });
                 }}
                 style={{
                   border: 'none',
@@ -622,14 +693,16 @@ function GgufVariantList({
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
         GGUF variants ({variants.length})
       </div>
-      {/* Sort variants: recommended (Q4_K_M) first, then by size ascending */}
+      {/* Sort variants: recommended (hardware-aware) first, then by size ascending */}
+      {(() => null)()}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {sortVariantsForUx(variants).slice(0, 12).map((v) => {
+        {(() => sortVariantsForUx(variants, hwMaxVramGB))().slice(0, 12).map((v) => {
           const key = v.quant ?? '__default__';
           const state = launchState[key];
           const dl = downloadState[v.fileName];
           const downloading = !!dl && !dl.done && !dl.error;
-          const isRecommended = v.quant === 'Q4_K_M';
+          const recommendedFile = pickRecommendedVariant(variants, hwMaxVramGB)?.fileName;
+          const isRecommended = recommendedFile === v.fileName;
           const qualityHint = qualityHintFor(v.quant);
           return (
             <div
@@ -652,7 +725,11 @@ function GgufVariantList({
                 {isRecommended && (
                   <span
                     style={{ ...tagChipStyle, background: 'var(--accent-gradient)', color: '#fff' }}
-                    title="Q4_K_M is the recommended balance of size + quality for most users."
+                    title={
+                      hwMaxVramGB
+                        ? `Largest quant that fits comfortably on your ${hwMaxVramGB.toFixed(1)} GB GPU. Picked automatically for you.`
+                        : 'Recommended balance of size + quality (community default).'
+                    }
                   >
                     ★ rec
                   </span>
@@ -1247,17 +1324,61 @@ function FitBadge({
 }
 
 /**
- * v4.0.2 deep-debug: surface a sensible default in the GGUF variant
- * list.  Q4_K_M is the de facto recommended quant — best balance of
- * size + quality for ~95% of users.  Put it first, then others by
- * ascending file size so the smallest "next options" lead.
+ * v4.0.2 deep-debug: pick the recommended variant given user hardware.
+ *
+ * Goal: surface the LARGEST quant that fits comfortably in their VRAM,
+ * since for most users "biggest model I can run" is the right choice.
+ * Comfort margin = 1.25x file size (leaves room for KV cache).
+ *
+ * Fallbacks when hardware is unknown:
+ *   - prefer Q4_K_M (the community default)
+ *   - then Q5_K_M
+ *   - then any non-Q2 / non-IQ1
+ *   - then the first variant in size order
  */
-function sortVariantsForUx(variants: HFGgufVariant[]): HFGgufVariant[] {
-  const recommended = variants.filter((v) => v.quant === 'Q4_K_M');
+function pickRecommendedVariant(
+  variants: HFGgufVariant[],
+  maxVramGB: number | null,
+): HFGgufVariant | null {
+  if (variants.length === 0) return null;
+  // Hardware-aware path: largest variant whose 1.25x file size fits in
+  // VRAM.  Iterate from biggest down.
+  if (maxVramGB && maxVramGB > 0) {
+    const vramBytes = maxVramGB * 1e9;
+    const sorted = [...variants]
+      .filter((v) => v.sizeBytes != null)
+      .sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0));
+    for (const v of sorted) {
+      if ((v.sizeBytes ?? 0) * 1.25 <= vramBytes) return v;
+    }
+    // Nothing fits comfortably — recommend the smallest as the
+    // "least bad" pick on this hardware.
+    const smallest = [...variants].sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0))[0];
+    if (smallest) return smallest;
+  }
+  // Hardware-unknown path: community defaults.
+  return (
+    variants.find((v) => v.quant === 'Q4_K_M') ||
+    variants.find((v) => v.quant === 'Q5_K_M') ||
+    variants.find((v) => v.quant && !/^Q2|^IQ1/i.test(v.quant)) ||
+    variants[0] ||
+    null
+  );
+}
+
+/**
+ * Sort variants for display: recommended first (per pickRecommendedVariant),
+ * then by ascending file size so smaller options follow.
+ */
+function sortVariantsForUx(
+  variants: HFGgufVariant[],
+  maxVramGB: number | null,
+): HFGgufVariant[] {
+  const rec = pickRecommendedVariant(variants, maxVramGB);
   const others = variants
-    .filter((v) => v.quant !== 'Q4_K_M')
+    .filter((v) => v !== rec)
     .sort((a, b) => (a.sizeBytes ?? 0) - (b.sizeBytes ?? 0));
-  return [...recommended, ...others];
+  return rec ? [rec, ...others] : others;
 }
 
 /** One-line tooltip for each quant level. */
