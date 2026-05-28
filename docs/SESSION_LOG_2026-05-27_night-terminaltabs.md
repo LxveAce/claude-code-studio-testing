@@ -327,3 +327,59 @@ Followups list 4 → 3:
 3. EmbeddedTerminal PID surfacing
 
 All three are bounded; the next session has room to maneuver.
+
+---
+
+## Addendum 5 — EmbeddedTerminal PID surfacing (PR #23, sixth commit)
+
+User said "please continue". Picked off the smallest remaining followup
+— M-2 from `SECURITY_REVIEW_TERMINAL_TABS.md`. StatusBar PID footer
+was showing 0 for any model tab because `pidByPane` in App.tsx was
+only being populated by TerminalPanel's `onReady` event (which doesn't
+fire for already-spawned PTYs that EmbeddedTerminal attaches to).
+
+Branch: `feature/embedded-pid` stacked on `feature/tool-use-renderer`.
+
+### What got built
+
+| File | Change |
+|---|---|
+| `EmbeddedTerminal.tsx` | New `onPidChange?: (paneId, pid) => void` prop. The existing 1.5s `models.listRunning()` probe (originally for stale-popout detection) now also fires `onPidChange` with the harvested PID when the pane is found. Effect deps updated. |
+| `TerminalTabs.tsx` | Passes `onPidChange` through to `EmbeddedTerminal` (App.tsx already routes the prop for TerminalPanel; now both paths use it). |
+| `EmbeddedTerminal.tsx.lmm.md` | Addendum covering the change + the deferred T3 tension now resolved. |
+| `STATUS.md` | Followups 3 → 2. Header updated for 6 stacked PRs. |
+
+### Verification
+
+- ✅ `npx tsc --noEmit` clean.
+- ✅ `npx vite build` clean.
+- ✅ `node scripts/runtime-verify.mjs` — 30/30 still pass.
+
+End-to-end smoke (StatusBar shows real PID for a model tab) needs a
+real model tab launched, which requires Ollama or another local CLI
+installed. Renderer-side wiring is unit-clean.
+
+### Why no separate red-team doc
+
+Change is 4 lines of substantive code + 1 prop addition + 1 dep array
+update. Below the threshold for a dedicated red-team file. The
+`EmbeddedTerminal.tsx.lmm.md` addendum covers the design + tradeoffs.
+
+### Final state (revised)
+
+**6 PRs in flight** on the testing repo:
+- #18 — TerminalTabs wiring + session v2
+- #19 — Commands tab mirror + H-1 fix + verifier extension
+- #20 — Claude chat-mode profile + JSONL parser
+- #21 — Polish (submit flag + tab cap)
+- #22 — Tool-use / tool-result / thinking renderer
+- #23 — EmbeddedTerminal PID surfacing (this commit)
+
+**Followups list 3 → 2:**
+1. Verify chat-mode flag surface against a real Claude binary (self-verifying)
+2. "Stop generation" button in chat skin
+
+Of the original morning-handoff 3 deferred items + 6 surfaced
+followups (= 9 total), **7 have shipped**. Remaining 2 are bounded:
+one is a manual-test confirmation, the other is empirical UI that
+needs real-app testing to design correctly.

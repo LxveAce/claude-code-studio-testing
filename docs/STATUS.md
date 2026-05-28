@@ -1,8 +1,8 @@
 # Claude Code Studio — Testing Repo STATUS
 
 > **Version:** v3.1.0
-> **Last updated:** 2026-05-27 (post-handoff continuation — 5 stacked PRs from a single session: original 3-item deferred list drained + 2 polish iterations closing 3 of 6 surfaced followups)
-> **Branch this describes:** `master` (testing repo only — `LxveAce/claude-code-studio-testing`); 5 open feature branches stacked: #18 (foundation) → #19 (commands) → #20 (chat-mode) → #21 (polish) → #22 (tool-use renderer)
+> **Last updated:** 2026-05-27 (post-handoff continuation — 6 stacked PRs from a single session: original 3-item deferred list drained + polish/feature iterations closing 4 of 6 surfaced followups)
+> **Branch this describes:** `master` (testing repo only — `LxveAce/claude-code-studio-testing`); 6 open feature branches stacked: #18 (foundation) → #19 (commands) → #20 (chat-mode) → #21 (polish) → #22 (tool-use renderer) → #23 (PID surfacing)
 > **Latest session log:** [`SESSION_LOG_2026-05-27_night-terminaltabs.md`](./SESSION_LOG_2026-05-27_night-terminaltabs.md) (4 addendums)
 > **Latest verification report:** [`VERIFICATION_2026-05-27.md`](./VERIFICATION_2026-05-27.md)
 
@@ -291,9 +291,7 @@ original deferred list.
 
 ### Followups surfaced this session (priority order)
 
-Three of the original six shipped this session — PR #21 closed the two
-M-1s; PR #22 closed M-1 from chat-mode (tool-use renderer). Three
-remain:
+Four of the original six shipped this session. Two remain:
 
 1. **Verify Claude CLI flag surface for chat-mode** (H-1 in
    `SECURITY_REVIEW_CHAT_MODE.md`). The catalog uses
@@ -303,13 +301,12 @@ remain:
    run will surface any mismatch as a parse-error bubble.
 2. **"Stop generation" button in chat skin** (M-2 in chat-mode
    review). Replaces the send button while streaming; sends `\x03`
-   or an abort JSON event.
-3. **`EmbeddedTerminal` PID surfacing** (M-2 in TerminalTabs review).
-   StatusBar shows PID 0 for model tabs because `EmbeddedTerminal`
-   doesn't subscribe to a `ready` event.
+   or an abort JSON event. Schema/behavior depends on what Claude
+   actually accepts in stream-json mode — empirical.
 
-None of these block the next session — they're polish on shipping
-work.
+Neither of these block. Item #1 is self-verifying on first manual run;
+item #2 is a single-component UI addition once the abort signal
+behavior is confirmed.
 
 ---
 
@@ -343,9 +340,7 @@ work.
   already-spawned PTYs. Cosmetic only — Resource panel still tracks
   the model PTY bucket. Tracked as M-2 in
   `SECURITY_REVIEW_COMMANDS_TAB.md`.
-- **Model tab StatusBar PID display** is the only remaining UI gap
-  from the prior red-teams. Resource panel still shows the model
-  PTY bucket correctly; this is the PID footer cosmetic only.
+<!-- (model tab PID footer gap closed in PR #23) -->
 
 ---
 

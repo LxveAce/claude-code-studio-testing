@@ -310,6 +310,7 @@ export function TerminalTabs({
                   paneId={t.paneId}
                   compact={false}
                   registerSender={registerSender}
+                  onPidChange={onPidChange}
                   profile={t.profile}
                 />
               )}

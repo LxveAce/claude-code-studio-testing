@@ -32,12 +32,22 @@ interface Props {
     paneId: string,
     send: ((data: string) => void) | null
   ) => void;
+  /** Fired once the embed confirms the PTY is alive (via models:list-running).
+   *  Same signature as TerminalPanel's onPidChange so the StatusBar PID
+   *  footer works for model tabs the same way it does for Claude tabs. */
+  onPidChange?: (paneId: string, pid: number) => void;
   /** Catalog profile id of the tab. Threaded through to ChatSkinOverlay
    *  so it can pick the JSON-stream renderer for chat-mode profiles. */
   profile?: string;
 }
 
-export function EmbeddedTerminal({ paneId, compact = true, registerSender, profile }: Props) {
+export function EmbeddedTerminal({
+  paneId,
+  compact = true,
+  registerSender,
+  onPidChange,
+  profile,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
   // Per-pane chat-skin toggle, persisted via skin-prefs (localStorage).
@@ -116,13 +126,22 @@ export function EmbeddedTerminal({ paneId, compact = true, registerSender, profi
     // clicks Pop-out on a stale running-list entry (e.g. after panel
     // re-mount with a launched PTY that died while away), the embed will
     // be silent forever — write a placeholder so they know what happened.
+    // PR #23 (post-handoff): also harvest the PID from the same probe
+    // and fire onPidChange so the StatusBar PID footer surfaces a real
+    // number for model tabs (mirrors TerminalPanel's onReady wiring,
+    // which doesn't exist for already-spawned PTYs).
     setTimeout(() => {
       void (async () => {
         try {
           const live = await window.electronAPI.models.listRunning();
-          if (!live.some((p) => p.paneId === paneId)) {
+          const myPane = live.find((p) => p.paneId === paneId);
+          if (!myPane) {
             term.write(`\x1b[33m[paneId ${paneId} not found — the model may have exited.]\x1b[0m\r\n`);
             term.write(`\x1b[2mClose this view and Launch again from the Models panel.\x1b[0m\r\n`);
+            return;
+          }
+          if (myPane.pid > 0) {
+            onPidChange?.(paneId, myPane.pid);
           }
         } catch {
           // listRunning unavailable — skip the warning; the PTY may still be live
@@ -155,7 +174,7 @@ export function EmbeddedTerminal({ paneId, compact = true, registerSender, profi
       termRef.current = null;
       fitRef.current = null;
     };
-  }, [paneId, compact, fitIfChanged, registerSender]);
+  }, [paneId, compact, fitIfChanged, registerSender, onPidChange]);
 
   return (
     <div

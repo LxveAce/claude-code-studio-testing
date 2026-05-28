@@ -155,3 +155,37 @@ Related:
   `registerSender` through (H-1 fix).
 - [[command-families.ts.lmm.md]] — the new data registry whose Commands
   the registered sender can finally reach.
+
+---
+
+## Addendum — PID surfacing for model tabs (PR #23)
+
+Closes M-2 from `SECURITY_REVIEW_TERMINAL_TABS.md`. Adds an
+`onPidChange?` prop matching TerminalPanel's. The existing 1.5s
+`models.listRunning()` probe (originally only used to detect stale
+popout windows) now also harvests the PID and fires the callback
+when the pane is found.
+
+**Behavior:**
+- StatusBar PID footer was previously 0 for any model tab — `pidByPane`
+  in App.tsx was only populated by TerminalPanel's `onReady` event,
+  which doesn't fire for already-spawned PTYs that EmbeddedTerminal
+  attaches to.
+- After this change: 1.5s after mount, the embed calls
+  `models.listRunning()`, finds its own paneId in the result, and
+  fires `onPidChange(paneId, found.pid)` if the PID is > 0.
+- TerminalTabs threads the prop from App.tsx (which already has the
+  shared `pidByPane` reducer) to EmbeddedTerminal.
+
+**Tradeoffs:**
+- 1.5s delay before the PID shows in the footer — same delay as the
+  "PTY not found" probe; piggybacks on the existing call to keep the
+  code minimal. Could split into a faster (~300ms) PID probe + the
+  slower not-found probe; not worth the complexity for a footer.
+- PID is never refreshed mid-session. If a model PTY were ever
+  restarted by main (it isn't today), the footer would be stale.
+- No cleanup on unmount — `pidByPane[paneId]` survives tab close,
+  matching TerminalPanel's behavior (consistent leak, not a new one).
+
+**T3 (in the NODES) resolved.** The "StatusBar PID parity" deferred
+item is now closed.
